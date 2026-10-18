@@ -114,7 +114,7 @@ const WELL = `
 
 let iceTexture: THREE.Texture | null = null;
 
-// Frost: a pale disc, clearer in the middle, scored with fine cracks.
+// Clear blue ice: a glassy disc with a frosted rim, scored with fine cracks.
 function frostTexture(): THREE.Texture {
   if (iceTexture) return iceTexture;
   const size = 256;
@@ -122,9 +122,9 @@ function frostTexture(): THREE.Texture {
   canvas.width = canvas.height = size;
   const g = canvas.getContext('2d')!;
   const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  grad.addColorStop(0, 'rgba(120, 180, 225, 0.3)');
-  grad.addColorStop(0.75, 'rgba(150, 200, 235, 0.42)');
-  grad.addColorStop(0.93, 'rgba(190, 225, 250, 0.6)');
+  grad.addColorStop(0, 'rgba(40, 105, 160, 0.62)');
+  grad.addColorStop(0.75, 'rgba(60, 130, 185, 0.6)');
+  grad.addColorStop(0.93, 'rgba(150, 205, 240, 0.7)');
   grad.addColorStop(1, 'rgba(190, 225, 250, 0)');
   g.fillStyle = grad;
   g.fillRect(0, 0, size, size);
@@ -197,10 +197,9 @@ export class Hazards {
       map: frostTexture(),
       transparent: true,
       depthWrite: false,
-      roughness: 0.12,
-      metalness: 0.4,
-      emissive: 0x2a6a90,
-      emissiveIntensity: 0.12,
+      roughness: 0.05,
+      metalness: 0.3,
+      envMapIntensity: 2,
     });
     for (const p of this.ice) {
       const mesh = new THREE.Mesh(discGeo, iceMat);

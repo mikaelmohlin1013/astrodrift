@@ -3,6 +3,7 @@ import type { Input } from './input';
 import { WORLD_SIZE, resolveRocks, type Rock } from './world';
 import type { Spot } from './level';
 import { halo, type Particles } from './fx';
+import { buildGripen } from './gripen';
 
 const SPEED = 11;
 const BOOST = 1.6;
@@ -18,14 +19,12 @@ export const PLAYER_BOUNCE = 0.6;
 
 export const PLAYER_RADIUS = 0.9;
 
-const HULL = 0x4fc3ff;
-
-// A small hovering ship the player steers around the ground.
+// The player's hovering Gripen, steered around the ground.
 export class Player {
   readonly mesh = new THREE.Group();
   readonly velocity = new THREE.Vector3();
   private time = 0;
-  private hullMat = new THREE.MeshStandardMaterial({ color: HULL, metalness: 0.4, roughness: 0.35, flatShading: true });
+  private paint: THREE.MeshStandardMaterial[];
   private flames: THREE.Mesh[] = [];
   private nozzles: THREE.Vector3[] = [];
   private boosting = false;
@@ -33,73 +32,37 @@ export class Player {
   private heading = 0; // yaw in radians, 0 = facing north (-z)
   private turnRate = 0;
   private emitTimer = 0;
-  private guns: THREE.Vector3[] = [];
+  private guns: THREE.Vector3[];
   private nextGun = 0;
   private shield: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
   /** 1 on solid ground, 0 on ice: how much drag and sideways grip there is. */
   traction = 1;
 
   constructor() {
-    const trim = new THREE.MeshStandardMaterial({ color: 0x1d2a44, metalness: 0.6, roughness: 0.4, flatShading: true });
+    // A JAS 39 Gripen; bolts leave from under the intakes, alternating sides.
+    const gripen = buildGripen();
+    this.paint = gripen.paint;
+    this.guns = gripen.muzzles;
+    this.mesh.add(gripen.group);
 
-    // Fuselage: a long six-sided cone, tip pointing forward along -z.
-    const body = new THREE.Mesh(new THREE.ConeGeometry(0.55, 2.4, 6).rotateX(-Math.PI / 2), this.hullMat);
-    body.scale.set(1, 0.7, 1);
-
-    // Swept wings, built from a flat triangle shape and given a little depth.
-    const wingShape = new THREE.Shape();
-    wingShape.moveTo(0, -0.3);
-    wingShape.lineTo(1.5, 0.8);
-    wingShape.lineTo(1.4, 1.05);
-    wingShape.lineTo(0, 0.85);
-    const wingGeo = new THREE.ExtrudeGeometry(wingShape, { depth: 0.12, bevelEnabled: false }).rotateX(Math.PI / 2);
-    const wings = [1, -1].map((side) => {
-      const wing = new THREE.Mesh(wingGeo, this.hullMat);
-      wing.scale.x = side;
-      wing.position.set(side * 0.2, 0.05, 0);
-      return wing;
-    });
-
-    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.7).translate(0, 0.3, 0.6), trim);
-
-    const cockpit = new THREE.Mesh(
-      new THREE.SphereGeometry(0.32, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2),
-      new THREE.MeshStandardMaterial({ color: 0x0b1530, emissive: 0x2a6bff, emissiveIntensity: 0.5, metalness: 0.9, roughness: 0.1 }),
-    );
-    cockpit.scale.set(1, 0.8, 1.8);
-    cockpit.position.set(0, 0.18, -0.1);
-
-    this.mesh.add(body, ...wings, fin, cockpit);
-
-    // A small laser cannon under each wing; shots alternate between them.
-    const gunGeo = new THREE.CylinderGeometry(0.07, 0.09, 0.9, 6).rotateX(Math.PI / 2);
-    for (const side of [-1, 1]) {
-      const gun = new THREE.Mesh(gunGeo, trim);
-      gun.position.set(side * 0.8, -0.05, 0.1);
-      this.mesh.add(gun);
-      this.guns.push(new THREE.Vector3(side * 0.8, -0.05, -0.4));
-    }
-
-    // Two engines with flames that stretch with speed.
-    const engineGeo = new THREE.CylinderGeometry(0.2, 0.26, 0.6, 8).rotateX(Math.PI / 2);
-    const flameGeo = new THREE.ConeGeometry(0.17, 1, 8).rotateX(Math.PI / 2).translate(0, 0, 0.5);
-    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb060, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
-    for (const side of [-1, 1]) {
-      const engine = new THREE.Mesh(engineGeo, trim);
-      engine.position.set(side * 0.42, 0, 1.0);
-      const flame = new THREE.Mesh(flameGeo, flameMat);
-      flame.position.set(side * 0.42, 0, 1.3);
-      const glow = halo(0xffa040, 1.2, 0.9);
-      glow.position.set(side * 0.42, 0, 1.35);
+    // One engine: a hot blue-white core inside an orange afterburner plume,
+    // both stretching with speed.
+    const n = gripen.nozzle;
+    const flameGeo = new THREE.ConeGeometry(0.1, 1, 16, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5);
+    const outer = new THREE.MeshBasicMaterial({ color: 0xff9a40, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false });
+    const core = new THREE.MeshBasicMaterial({ color: 0xbfd8ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+    for (const [mat, width] of [[outer, 1], [core, 0.55]] as const) {
+      const flame = new THREE.Mesh(flameGeo, mat);
+      flame.position.copy(n);
+      flame.scale.x = flame.scale.y = width;
       this.flames.push(flame);
-      this.nozzles.push(new THREE.Vector3(side * 0.42, 0, 1.45));
-      this.mesh.add(engine, flame, glow);
+      this.mesh.add(flame);
     }
-
-    this.mesh.traverse((o) => {
-      if (o instanceof THREE.Mesh && o.material !== flameMat) o.castShadow = true;
-    });
-    this.mesh.add(new THREE.PointLight(0xffa040, 4, 6).translateZ(1.6));
+    const glow = halo(0xffa040, 0.9, 0.8);
+    glow.position.copy(n).add(new THREE.Vector3(0, 0, 0.05));
+    this.mesh.add(glow);
+    this.nozzles.push(n.clone().add(new THREE.Vector3(0, 0, 0.1)));
+    this.mesh.add(new THREE.PointLight(0xffa040, 4, 6).translateZ(n.z + 0.3));
 
     // Shield bubble: a squashed sphere that glows at its edges, so it reads as
     // a bubble rather than a solid ball.
@@ -202,7 +165,7 @@ export class Player {
 
     const flicker = 0.85 + Math.random() * 0.3;
     const len = (thrust > 0 ? 0.9 + this.speed01 * 0.9 : 0.25) * (this.boosting ? 1.4 : 1) * flicker;
-    for (const f of this.flames) f.scale.set(1, 1, len);
+    this.flames.forEach((f, i) => (f.scale.z = len * (i ? 0.6 : 1)));
     this.mesh.position.y = 1 + Math.sin(this.time * 3) * 0.12;
   }
 
@@ -224,13 +187,14 @@ export class Player {
     for (const n of this.nozzles) {
       const p = n.clone().applyMatrix4(this.mesh.matrixWorld);
       const v = back.clone().add(new THREE.Vector3().randomDirection().multiplyScalar(0.6));
-      particles.spawn(p, v, color, 0.35 + Math.random() * 0.2);
+      // One engine, so two sparks per puff to keep the trail as thick as before.
+      for (let k = 0; k < 2; k++) particles.spawn(p, v.clone().add(new THREE.Vector3().randomDirection().multiplyScalar(0.3)), color, 0.35 + Math.random() * 0.2);
     }
   }
 
   /** Flashes the hull red for a moment after a hit (0..1 strength). */
   setDamageFlash(amount: number): void {
-    this.hullMat.emissive.setRGB(amount, 0, 0);
+    for (const m of this.paint) m.emissive.setRGB(amount, 0, 0);
   }
 
   /**
