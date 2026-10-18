@@ -2,6 +2,8 @@
 
 Top-down third-person browser game built with TypeScript, Three.js and Vite.
 
+Play it at https://mikaelmohlin1013.github.io/astrodrift/ (redeployed on every push to `main`).
+
 ## Run
 
 ```
