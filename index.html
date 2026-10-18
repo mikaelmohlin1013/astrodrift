@@ -53,6 +53,35 @@
       #title .prompt { font-size: 20px; color: #6affd8; }
       #title-levels { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 20px; margin-top: 14px; }
       #title-levels .locked { opacity: 0.3; }
+      #title-bank { color: #6affd8; }
+      #shield { width: 180px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; margin-top: 3px; }
+      #shield-fill { height: 100%; width: 100%; background: #8a9dff; box-shadow: 0 0 8px #8a9dff; transition: width 0.1s; }
+      #missiles { font-size: 16px; letter-spacing: 3px; color: #ffb060; }
+      #missiles small { letter-spacing: 0; opacity: 0.7; }
+      #bank { color: #6affd8; font-weight: 600; }
+      #bank small { color: #cfe3ff; font-weight: 400; opacity: 0.7; }
+      .gem { color: #6affd8; }
+      #shop { background: rgba(5, 7, 13, 0.8); pointer-events: auto; overflow-y: auto; justify-content: safe center; padding: 16px; box-sizing: border-box; }
+      #shop h1 { font-size: 34px; color: #7dff8a; text-shadow: 0 0 18px rgba(125, 255, 138, 0.45); }
+      #shop-service { color: #7dff8a; }
+      #shop-bank { font-size: 20px; font-weight: 600; }
+      #shop-list { display: grid; grid-template-columns: repeat(2, minmax(0, 300px)); gap: 8px; margin-top: 6px; text-align: left; }
+      @media (max-width: 660px) { #shop-list { grid-template-columns: minmax(0, 340px); } }
+      .item {
+        display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 8px 12px; cursor: pointer; user-select: none;
+        border: 1px solid rgba(207, 227, 255, 0.18); border-radius: 8px; background: rgba(20, 28, 48, 0.65);
+      }
+      .item.sel { border-color: #7dff8a; background: rgba(28, 50, 40, 0.75); box-shadow: 0 0 16px rgba(125, 255, 138, 0.25); }
+      .item .name { font-weight: 600; }
+      .item .pips { margin-left: 4px; font-size: 10px; letter-spacing: 2px; color: #7dff8a; }
+      .item .price { font-weight: 600; text-align: right; }
+      .item .desc { grid-column: 1 / -1; font-size: 12px; opacity: 0.75; }
+      .item.cant .price { color: #ff7a86; }
+      .item.maxed .price { color: #7dff8a; }
+      .item.deny { animation: shake 0.25s; }
+      @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+      #shop-info { min-height: 1.4em; opacity: 0.85; }
+      #shop .prompt { animation: none; opacity: 0.8; margin-top: 4px; }
     </style>
   </head>
   <body>
@@ -61,6 +90,8 @@
       <span id="level-name"></span>
       <span class="label">Hull</span>
       <div id="hull"><div id="hull-fill"></div></div>
+      <div id="shield-row" class="hidden"><span class="label">Shield</span><div id="shield"><div id="shield-fill"></div></div></div>
+      <div id="missiles-row" class="hidden"><span class="label">Missiles</span><br /><span id="missiles"></span></div>
       <span class="label">Crystals</span>
       <span id="score">0</span>
       <span class="label">Enemies destroyed</span>
@@ -70,23 +101,27 @@
       <span class="label">Time</span>
       <span id="time">0.0</span>
       <span class="label">Best <span id="best">--</span></span>
+      <span id="bank"></span>
     </div>
     <div id="toast" class="overlay"></div>
-    <div id="help" class="overlay hidden">W / ↑ thrust · A D / ← → turn · S / ↓ brake · Shift boost · Space fire · Collect every crystal, then fly through the gate</div>
+    <div id="help" class="overlay hidden">W / ↑ thrust · A D / ← → turn · S / ↓ brake · Shift boost · Space fire · E missile · Land slowly on the green pad to repair and upgrade</div>
     <div id="sound" class="overlay"><kbd>M</kbd> sound <span id="sound-state">on</span></div>
 
     <div id="title" class="overlay panel">
       <h1>ASTRODRIFT</h1>
-      <div class="tagline">Pick up every crystal in the field, then fly through the gate at the far end. Mind the rocks, and shoot the turrets and chasers before they get you.</div>
+      <div class="tagline">Pick up every crystal in the field, then fly through the gate at the far end. Mind the rocks, and shoot the turrets and chasers before they get you. Land on the green repair pad in each level to fix your hull and spend crystals on upgrades.</div>
       <div class="keys">
         <span><kbd>W</kbd> or <kbd>↑</kbd></span><span>thrust forward</span>
         <span><kbd>A</kbd> <kbd>D</kbd> or <kbd>←</kbd> <kbd>→</kbd></span><span>turn the ship</span>
         <span><kbd>S</kbd> or <kbd>↓</kbd></span><span>brake and reverse</span>
         <span><kbd>Shift</kbd></span><span>boost while thrusting</span>
         <span><kbd>Space</kbd></span><span>fire lasers</span>
+        <span><kbd>E</kbd></span><span>launch a homing missile (once bought)</span>
+        <span><kbd>U</kbd></span><span>upgrade shop</span>
         <span><kbd>M</kbd></span><span>sound on / off</span>
       </div>
       <div id="title-levels"></div>
+      <div id="title-bank"></div>
       <div id="title-best" class="label"></div>
       <div id="title-prompt" class="prompt">Press Enter to launch</div>
     </div>
@@ -102,6 +137,15 @@
       <div id="clear-time" class="result"></div>
       <div id="clear-detail"></div>
       <div id="clear-prompt" class="prompt">Press Enter to fly again</div>
+    </div>
+
+    <div id="shop" class="overlay panel hidden">
+      <h1 id="shop-title">Repair station</h1>
+      <div id="shop-service"></div>
+      <div id="shop-bank"></div>
+      <div id="shop-list"></div>
+      <div id="shop-info"></div>
+      <div id="shop-prompt" class="prompt"></div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

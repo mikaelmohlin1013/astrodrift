@@ -159,6 +159,44 @@ export class Sfx {
     this.tone(660, 0.09, 0.09, 'square', 0.05);
   }
 
+  /** Whoosh of a missile launch. */
+  missile(): void {
+    this.noiseBurst(0, 0.5, 500, 2600, 0.22);
+    this.sweep(180, 620, 0, 0.35, 'sawtooth', 0.05);
+  }
+
+  /** Bright shimmer when the shield absorbs a hit. */
+  shieldHit(): void {
+    this.sweep(1900, 900, 0, 0.22, 'sine', 0.12);
+    this.sweep(2600, 1300, 0.02, 0.18, 'triangle', 0.05);
+  }
+
+  /** Falling buzz when the shield runs out. */
+  shieldDown(): void {
+    this.sweep(900, 120, 0, 0.5, 'square', 0.06);
+  }
+
+  /** Rising arpeggio when the ship docks at a repair station. */
+  dock(): void {
+    [523, 659, 784, 1047].forEach((f, i) => this.tone(f, i * 0.07, 0.35, 'sine', 0.15));
+  }
+
+  /** Two-note ka-ching for buying an upgrade. */
+  buy(): void {
+    this.tone(988, 0, 0.08, 'square', 0.06);
+    this.tone(1319, 0.08, 0.3, 'triangle', 0.14);
+  }
+
+  /** Low buzz when something can't be bought. */
+  deny(): void {
+    this.sweep(200, 150, 0, 0.18, 'square', 0.07);
+  }
+
+  /** Soft blip for moving the shop selection. */
+  tick(): void {
+    this.tone(1200, 0, 0.03, 'sine', 0.05);
+  }
+
   start(): void {
     this.sweep(220, 880, 0, 0.35, 'triangle', 0.18);
   }

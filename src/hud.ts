@@ -5,6 +5,12 @@ export class Hud {
   private timer = byId('timer');
   private help = byId('help');
   private hullFill = byId('hull-fill');
+  private shieldRow = byId('shield-row');
+  private shieldFill = byId('shield-fill');
+  private missilesRow = byId('missiles-row');
+  private missiles = byId('missiles');
+  private bank = byId('bank');
+  private titleBank = byId('title-bank');
   private score = byId('score');
   private kills = byId('kills');
   private levelName = byId('level-name');
@@ -36,12 +42,28 @@ export class Hud {
     this.best.textContent = best === null ? '--' : formatTime(best);
   }
 
+  /** Shield charge, missiles left and crystals banked and still to bank. */
+  updateGear(shield: number, maxShield: number, missiles: number, maxMissiles: number, bank: number, pending: number): void {
+    this.shieldRow.classList.toggle('hidden', maxShield === 0);
+    if (maxShield > 0) this.shieldFill.style.width = `${Math.round((shield / maxShield) * 100)}%`;
+    this.missilesRow.classList.toggle('hidden', maxMissiles === 0);
+    if (maxMissiles > 0) {
+      this.missiles.innerHTML = missiles > 0 ? `${'▲'.repeat(missiles)}` : '<small>empty · restock at a station</small>';
+    }
+    this.bank.innerHTML = `◆ ${bank}${pending > 0 ? ` <small>+${pending} to bank</small>` : ''}`;
+  }
+
   /** Shows a message in the middle of the screen for a few seconds. */
   message(text: string, seconds = 2.5): void {
     this.toast.textContent = text;
     this.toast.classList.add('on');
     clearTimeout(this.toastTimer);
     this.toastTimer = window.setTimeout(() => this.toast.classList.remove('on'), seconds * 1000);
+  }
+
+  hideMessage(): void {
+    clearTimeout(this.toastTimer);
+    this.toast.classList.remove('on');
   }
 
   setSound(on: boolean): void {
@@ -55,7 +77,8 @@ export class Hud {
     this.hitFlash.classList.add('on');
   }
 
-  showTitle(best: number | null, levels: string[], unlocked: number): void {
+  showTitle(best: number | null, levels: string[], unlocked: number, bank: number): void {
+    this.titleBank.innerHTML = bank > 0 ? `◆ ${bank} crystals banked · press <kbd>U</kbd> to spend them` : '';
     this.titleBest.textContent = best === null ? '' : `Level 1 best ${formatTime(best)}`;
     this.titleLevels.innerHTML = levels
       .map((name, i) => `<span class="${i < unlocked ? '' : 'locked'}"><kbd>${i + 1}</kbd> ${name}</span>`)
@@ -74,8 +97,8 @@ export class Hud {
     this.toast.classList.remove('on');
   }
 
-  showGameOver(collected: number, total: number, name: string): void {
-    this.finalScore.textContent = `${collected} of ${total} crystals collected`;
+  showGameOver(collected: number, total: number, name: string, lost: number): void {
+    this.finalScore.textContent = `${collected} of ${total} crystals collected${lost > 0 ? ` · ${lost} unbanked crystals lost` : ''}`;
     this.overPrompt.textContent = `Press Enter to retry ${name} · Esc for the title screen`;
     this.gameOver.classList.remove('hidden');
     this.help.classList.add('hidden');
@@ -89,11 +112,14 @@ export class Hud {
     killed: number,
     enemies: number,
     next: { number: number; name: string } | null,
+    banked: number,
   ): void {
     const record = seconds <= best;
     this.clearTitle.textContent = next ? `Level ${level} clear` : 'All levels clear!';
     this.clearTime.textContent = `${formatTime(seconds)}${record ? ' · new best!' : ` · best ${formatTime(best)}`}`;
-    this.clearDetail.textContent = `Hull left ${Math.round(hull * 100)}% · ${killed} of ${enemies} enemies destroyed`;
+    this.clearDetail.innerHTML =
+      `Hull left ${Math.round(hull * 100)}% · ${killed} of ${enemies} enemies destroyed<br />` +
+      `<span class="gem">◆</span> ${banked} crystals banked · press <kbd>U</kbd> to spend them`;
     this.clearPrompt.textContent = next ? `Press Enter for level ${next.number}: ${next.name}` : 'Press Enter to fly again from level 1';
     this.levelClear.classList.remove('hidden');
     this.help.classList.add('hidden');
