@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LEVEL } from './level';
+import type { Spot } from './level';
 import type { Rock } from './world';
 import { halo } from './fx';
 
@@ -7,13 +7,13 @@ const RADIUS = 2.6;
 const LOCKED = new THREE.Color(0xff5a6e);
 const OPEN = new THREE.Color(0x9a7bff);
 
-// The exit gate at the north end of the level: an upright ring between two
+// The exit gate at the north end of each level: an upright ring between two
 // pylons. It stays dim and red until every crystal is collected, then lights
 // up, and flying through it finishes the level.
 export class Gate {
-  readonly position = new THREE.Vector3(LEVEL.gate.x, 0, LEVEL.gate.z);
+  readonly position = new THREE.Vector3();
   /** The two pylons, for collisions. */
-  readonly pylons: Rock[];
+  readonly pylons: Rock[] = [];
   private group = new THREE.Group();
   private ringMat = new THREE.MeshStandardMaterial({ color: 0x2a2f45, emissive: LOCKED, emissiveIntensity: 0.6, metalness: 0.6, roughness: 0.3 });
   private portal: THREE.Mesh<THREE.CircleGeometry, THREE.MeshBasicMaterial>;
@@ -24,7 +24,6 @@ export class Gate {
 
   constructor(scene: THREE.Scene) {
     const g = this.group;
-    g.position.copy(this.position);
 
     const ring = new THREE.Mesh(new THREE.TorusGeometry(RADIUS, 0.32, 12, 48), this.ringMat);
     ring.position.y = RADIUS + 0.4;
@@ -38,13 +37,12 @@ export class Gate {
 
     const pylonMat = new THREE.MeshStandardMaterial({ color: 0x3a4058, metalness: 0.5, roughness: 0.5, flatShading: true });
     const pylonGeo = new THREE.CylinderGeometry(0.45, 0.7, RADIUS * 2 + 1.2, 6).translate(0, RADIUS + 0.6, 0);
-    this.pylons = [];
     for (const side of [-1, 1]) {
       const pylon = new THREE.Mesh(pylonGeo, pylonMat);
       pylon.position.x = side * (RADIUS + 0.6);
       pylon.castShadow = true;
       g.add(pylon);
-      this.pylons.push({ x: this.position.x + pylon.position.x, z: this.position.z, radius: 0.75 });
+      this.pylons.push({ x: pylon.position.x, z: 0, radius: 0.75 });
     }
 
     this.glow = halo(LOCKED, 9, 0.4);
@@ -52,6 +50,18 @@ export class Gate {
     this.light.position.y = ring.position.y;
     g.add(ring, this.portal, this.glow, this.light);
     scene.add(g);
+  }
+
+  /** Moves the gate to a level's exit. */
+  place(at: Spot): void {
+    const dx = at.x - this.position.x;
+    const dz = at.z - this.position.z;
+    for (const p of this.pylons) {
+      p.x += dx;
+      p.z += dz;
+    }
+    this.position.set(at.x, 0, at.z);
+    this.group.position.copy(this.position);
   }
 
   setOpen(open: boolean): void {

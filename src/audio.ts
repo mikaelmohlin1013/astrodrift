@@ -130,6 +130,35 @@ export class Sfx {
     this.noiseBurst(0, 1.4, 2500, 80, 0.6);
   }
 
+  /** Short zap for the ship's laser. */
+  laser(): void {
+    this.sweep(1500, 420, 0, 0.09, 'square', 0.05);
+    this.sweep(900, 300, 0, 0.07, 'triangle', 0.06);
+  }
+
+  /** Lower, buzzier shot for enemy turrets. */
+  enemyShot(): void {
+    this.sweep(520, 160, 0, 0.18, 'sawtooth', 0.06);
+  }
+
+  /** Tick when a bolt hits an enemy without destroying it. */
+  enemyHit(): void {
+    this.noiseBurst(0, 0.07, 3000, 800, 0.12);
+    this.tone(1200, 0, 0.05, 'square', 0.04);
+  }
+
+  /** Pop and crackle when an enemy is destroyed. */
+  enemyDie(): void {
+    this.sweep(300, 50, 0, 0.35, 'square', 0.12);
+    this.noiseBurst(0, 0.45, 3000, 120, 0.35);
+  }
+
+  /** Two quick beeps when a chaser spots the ship. */
+  alert(): void {
+    this.tone(880, 0, 0.07, 'square', 0.05);
+    this.tone(660, 0.09, 0.09, 'square', 0.05);
+  }
+
   start(): void {
     this.sweep(220, 880, 0, 0.35, 'triangle', 0.18);
   }
