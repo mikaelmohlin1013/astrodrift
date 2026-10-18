@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AstroDrift</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #05070d; }
+      canvas { display: block; }
+      #hud {
+        position: fixed; left: 16px; bottom: 16px; color: #cfe3ff;
+        font: 14px/1.4 system-ui, sans-serif; opacity: 0.8; pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hud">WASD / arrow keys to move · Shift to boost</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
