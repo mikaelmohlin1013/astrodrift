@@ -2,9 +2,17 @@ import * as THREE from 'three';
 
 export const WORLD_SIZE = 120;
 
+// A rock's footprint on the ground, used for collisions.
+export interface Rock {
+  x: number;
+  z: number;
+  radius: number;
+}
+
 // Builds the static scene: lights, ground, rocks and a starfield.
-// Returns the sun so it can follow the player and keep shadows nearby.
-export function createWorld(scene: THREE.Scene): THREE.DirectionalLight {
+// Returns the sun so it can follow the player and keep shadows nearby,
+// and the rock footprints so the game can collide against them.
+export function createWorld(scene: THREE.Scene): { sun: THREE.DirectionalLight; rocks: Rock[] } {
   scene.background = new THREE.Color(0x05070d);
   scene.fog = new THREE.Fog(0x05070d, 40, 110);
 
@@ -32,6 +40,7 @@ export function createWorld(scene: THREE.Scene): THREE.DirectionalLight {
   // Rocks scattered around, kept clear of the spawn point.
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x6b5a52, roughness: 1, flatShading: true });
   const rand = mulberry32(7);
+  const rocks: Rock[] = [];
   for (let i = 0; i < 60; i++) {
     const x = (rand() - 0.5) * (WORLD_SIZE - 10);
     const z = (rand() - 0.5) * (WORLD_SIZE - 10);
@@ -42,6 +51,7 @@ export function createWorld(scene: THREE.Scene): THREE.DirectionalLight {
     rock.rotation.set(rand() * Math.PI, rand() * Math.PI, rand() * Math.PI);
     rock.castShadow = rock.receiveShadow = true;
     scene.add(rock);
+    rocks.push({ x, z, radius: r * 0.85 });
   }
 
   const starPos = new Float32Array(1500 * 3);
@@ -54,11 +64,11 @@ export function createWorld(scene: THREE.Scene): THREE.DirectionalLight {
   stars.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
   scene.add(new THREE.Points(stars, new THREE.PointsMaterial({ color: 0xffffff, size: 1.2, fog: false })));
 
-  return sun;
+  return { sun, rocks };
 }
 
 // Small seeded random generator so the level looks the same every load.
-function mulberry32(seed: number): () => number {
+export function mulberry32(seed: number): () => number {
   return () => {
     seed |= 0;
     seed = (seed + 0x6d2b79f5) | 0;

@@ -7,14 +7,40 @@
     <style>
       html, body { margin: 0; height: 100%; overflow: hidden; background: #05070d; }
       canvas { display: block; }
-      #hud {
-        position: fixed; left: 16px; bottom: 16px; color: #cfe3ff;
-        font: 14px/1.4 system-ui, sans-serif; opacity: 0.8; pointer-events: none;
+      .overlay { position: fixed; color: #cfe3ff; font: 14px/1.4 system-ui, sans-serif; pointer-events: none; }
+      #help { left: 16px; bottom: 16px; opacity: 0.8; }
+      #stats { left: 16px; top: 16px; display: grid; gap: 6px; }
+      #hull { width: 180px; height: 10px; border-radius: 5px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+      #hull-fill { height: 100%; width: 100%; transition: width 0.15s; }
+      .label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7; }
+      #score { font-size: 28px; font-weight: 600; color: #6affd8; }
+      #hit-flash { inset: 0; box-shadow: inset 0 0 120px rgba(255, 60, 70, 0.9); opacity: 0; }
+      #hit-flash.on { animation: hit 0.4s ease-out; }
+      @keyframes hit { from { opacity: 1; } to { opacity: 0; } }
+      #game-over {
+        inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 8px; background: rgba(5, 7, 13, 0.6); text-align: center;
       }
+      #game-over[hidden] { display: none; }
+      #game-over h1 { margin: 0; font-size: 40px; letter-spacing: 0.04em; }
+      #final-score { font-size: 20px; color: #6affd8; }
     </style>
   </head>
   <body>
-    <div id="hud">WASD / arrow keys to move · Shift to boost</div>
+    <div id="hit-flash" class="overlay"></div>
+    <div id="stats" class="overlay">
+      <span class="label">Hull</span>
+      <div id="hull"><div id="hull-fill"></div></div>
+      <span class="label">Crystals</span>
+      <span id="score">0</span>
+      <span class="label">Best <span id="best">0</span></span>
+    </div>
+    <div id="help" class="overlay">WASD / arrow keys to move · Shift to boost · Collect crystals, avoid rocks</div>
+    <div id="game-over" class="overlay" hidden>
+      <h1>Hull destroyed</h1>
+      <div id="final-score"></div>
+      <div>Press Enter to fly again</div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
