@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Then open http://localhost:5173 and press Enter on the title screen. Move with WASD or the arrow keys, hold Shift to boost, and press M to turn sound on or off.
+Then open http://localhost:5173 and press Enter on the title screen. The controls are relative to the ship: W or Up thrusts forward, A/D or Left/Right turn, S or Down brakes and then reverses, and Shift boosts while thrusting. Press M to turn sound on or off.
 
 The level is a fixed course from the landing pad at the south edge to a gate at the north end: open ground, a switchback between two rock walls, a ring of boulders, and a final run to the gate. Pick up all 13 crystals to open the gate, then fly through it to finish. Each crystal patches the hull a little. Hitting rocks fast damages the hull, and when it runs out the run ends. The arrow on the ground points to the nearest crystal, and to the gate once it is open. Your best time is saved in the browser.
 

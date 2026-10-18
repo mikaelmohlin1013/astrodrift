@@ -132,7 +132,7 @@ renderer.setAnimationLoop(() => {
     }
     player.mesh.updateMatrixWorld();
     player.exhaust(dt, particles);
-    sfx.engine(player.speed01, player.isBoosting);
+    sfx.engine(player.speed01, player.isThrusting, player.isBoosting);
 
     for (const at of crystals.update(dt, player.mesh.position)) {
       sfx.collect(state.collected);
