@@ -4,10 +4,16 @@ import { WORLD_SIZE, type Rock } from './world';
 import { LEVEL } from './level';
 import { halo, type Particles } from './fx';
 
-const SPEED = 9;
-const BOOST = 1.8;
-const ACCEL = 10;
-const TURN = 12;
+const SPEED = 11;
+const BOOST = 1.6;
+const THRUST = 16; // forward acceleration
+const BRAKE = 18;
+const REVERSE = 6;
+const REVERSE_MAX = 4;
+const DRAG = 0.8;
+const GRIP = 2.5; // how quickly sideways drift dies away
+const TURN_SPEED = 3.2; // radians per second at full turn
+const TURN = 10;
 const BOUNCE = 0.6;
 
 export const PLAYER_RADIUS = 0.9;
@@ -23,6 +29,9 @@ export class Player {
   private flames: THREE.Mesh[] = [];
   private nozzles: THREE.Vector3[] = [];
   private boosting = false;
+  private thrusting = false;
+  private heading = 0; // yaw in radians, 0 = facing north (-z)
+  private turnRate = 0;
   private emitTimer = 0;
 
   constructor() {
@@ -85,37 +94,49 @@ export class Player {
     return Math.min(1, this.velocity.length() / (SPEED * BOOST));
   }
 
+  get isThrusting(): boolean {
+    return this.thrusting;
+  }
+
   get isBoosting(): boolean {
     return this.boosting;
   }
 
   update(dt: number, input: Input): void {
     this.time += dt;
-    const { x, z } = input.move;
-    const moving = x !== 0 || z !== 0;
-    this.boosting = input.boost && moving;
-    const max = SPEED * (input.boost ? BOOST : 1);
-    const target = new THREE.Vector3(x, 0, z).multiplyScalar(max);
-    this.velocity.lerp(target, 1 - Math.exp(-ACCEL * dt));
+    const { turn, thrust } = input;
+    this.thrusting = thrust > 0;
+    this.boosting = input.boost && this.thrusting;
+
+    // Rotate with left/right; the turn rate eases in and out so it feels weighty.
+    this.turnRate = THREE.MathUtils.lerp(this.turnRate, -turn * TURN_SPEED, 1 - Math.exp(-TURN * dt));
+    this.heading += this.turnRate * dt;
+    const forward = new THREE.Vector3(-Math.sin(this.heading), 0, -Math.cos(this.heading));
+
+    // Thrust pushes along the nose; down brakes and then backs up slowly.
+    const max = SPEED * (this.boosting ? BOOST : 1);
+    const along = this.velocity.dot(forward);
+    if (thrust > 0) this.velocity.addScaledVector(forward, THRUST * (this.boosting ? BOOST : 1) * dt);
+    else if (thrust < 0) this.velocity.addScaledVector(forward, (along > 0 ? -BRAKE : -REVERSE) * dt);
+    if (thrust < 0 && along < -REVERSE_MAX) this.velocity.addScaledVector(forward, -along - REVERSE_MAX);
+
+    // Drag, plus extra grip sideways so the ship drifts a little but still steers.
+    this.velocity.multiplyScalar(Math.exp(-DRAG * dt));
+    const sideways = new THREE.Vector3(-forward.z, 0, forward.x);
+    this.velocity.addScaledVector(sideways, -this.velocity.dot(sideways) * (1 - Math.exp(-GRIP * dt)));
+    if (this.velocity.length() > max) this.velocity.lerp(this.velocity.clone().setLength(max), 1 - Math.exp(-4 * dt));
     this.mesh.position.addScaledVector(this.velocity, dt);
 
     const half = WORLD_SIZE / 2 - 2;
     this.mesh.position.x = THREE.MathUtils.clamp(this.mesh.position.x, -half, half);
     this.mesh.position.z = THREE.MathUtils.clamp(this.mesh.position.z, -half, half);
 
-    // Face the direction of travel and bob gently.
-    if (this.velocity.lengthSq() > 0.05) {
-      const yaw = Math.atan2(-this.velocity.x, -this.velocity.z);
-      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-      // Bank into turns: roll by how much the velocity is swinging sideways.
-      const side = new THREE.Vector3(1, 0, 0).applyQuaternion(this.mesh.quaternion);
-      const bank = THREE.MathUtils.clamp(-side.dot(target.clone().sub(this.velocity)) * 0.06, -0.5, 0.5);
-      q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), bank));
-      this.mesh.quaternion.slerp(q, 1 - Math.exp(-TURN * dt));
-    }
+    // Face the heading and bank into turns.
+    const bank = THREE.MathUtils.clamp(this.turnRate * 0.18, -0.5, 0.5);
+    this.mesh.quaternion.setFromEuler(new THREE.Euler(0, this.heading, bank, 'YXZ'));
 
     const flicker = 0.85 + Math.random() * 0.3;
-    const len = (0.3 + this.speed01 * 1.6) * (this.boosting ? 1.4 : 1) * flicker;
+    const len = (thrust > 0 ? 0.9 + this.speed01 * 0.9 : 0.25) * (this.boosting ? 1.4 : 1) * flicker;
     for (const f of this.flames) f.scale.set(1, 1, len);
     this.mesh.position.y = 1 + Math.sin(this.time * 3) * 0.12;
   }
@@ -149,10 +170,10 @@ export class Player {
     return impact;
   }
 
-  /** Leaves a trail of exhaust sparks behind the engines while moving. */
+  /** Leaves a trail of exhaust sparks behind the engines while thrusting. */
   exhaust(dt: number, particles: Particles): void {
     this.emitTimer -= dt;
-    if (this.emitTimer > 0 || this.speed01 < 0.1) return;
+    if (this.emitTimer > 0 || !this.thrusting) return;
     this.emitTimer = this.boosting ? 0.012 : 0.03;
     const color = new THREE.Color(this.boosting ? 0xffd080 : 0xff9040);
     const back = new THREE.Vector3(0, 0, 3).applyQuaternion(this.mesh.quaternion);
@@ -171,6 +192,8 @@ export class Player {
   reset(): void {
     this.mesh.position.set(LEVEL.start.x, 1, LEVEL.start.z);
     this.mesh.quaternion.identity();
+    this.heading = 0;
+    this.turnRate = 0;
     this.velocity.set(0, 0, 0);
     this.setDamageFlash(0);
   }

@@ -1,4 +1,4 @@
-// Tracks which keys are held and turns them into a movement direction.
+// Tracks which keys are held and turns them into steering and thrust.
 export class Input {
   private keys = new Set<string>();
 
@@ -8,13 +8,16 @@ export class Input {
     window.addEventListener('blur', () => this.keys.clear());
   }
 
-  /** Returns x (right) and z (down the screen) in the range -1..1. */
-  get move(): { x: number; z: number } {
+  /** Steering: -1 turns left, 1 turns right. */
+  get turn(): number {
     const k = this.keys;
-    const x = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
-    const z = (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0);
-    const len = Math.hypot(x, z) || 1;
-    return { x: x / len, z: z / len };
+    return (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
+  }
+
+  /** 1 thrusts forward, -1 brakes and reverses. */
+  get thrust(): number {
+    const k = this.keys;
+    return (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
   }
 
   get boost(): boolean {
