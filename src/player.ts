@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { Input } from './input';
 import { WORLD_SIZE, type Rock } from './world';
+import { LEVEL } from './level';
+import { halo, type Particles } from './fx';
 
 const SPEED = 9;
 const BOOST = 1.8;
@@ -10,36 +12,88 @@ const BOUNCE = 0.6;
 
 export const PLAYER_RADIUS = 0.9;
 
-// A small hovering rover the player steers around the ground.
+const HULL = 0x4fc3ff;
+
+// A small hovering ship the player steers around the ground.
 export class Player {
   readonly mesh = new THREE.Group();
   readonly velocity = new THREE.Vector3();
   private time = 0;
-  private body: THREE.Mesh<THREE.ConeGeometry, THREE.MeshStandardMaterial>;
+  private hullMat = new THREE.MeshStandardMaterial({ color: HULL, metalness: 0.4, roughness: 0.35, flatShading: true });
+  private flames: THREE.Mesh[] = [];
+  private nozzles: THREE.Vector3[] = [];
+  private boosting = false;
+  private emitTimer = 0;
 
   constructor() {
-    const body = new THREE.Mesh(
-      new THREE.ConeGeometry(0.8, 2.2, 6),
-      new THREE.MeshStandardMaterial({ color: 0x4fc3ff, metalness: 0.3, roughness: 0.4, flatShading: true }),
-    );
-    body.rotation.x = Math.PI / 2; // point the tip forward along -z
-    body.castShadow = true;
-    this.body = body;
+    const trim = new THREE.MeshStandardMaterial({ color: 0x1d2a44, metalness: 0.6, roughness: 0.4, flatShading: true });
 
-    const glow = new THREE.Mesh(
-      new THREE.SphereGeometry(0.35, 12, 12),
-      new THREE.MeshBasicMaterial({ color: 0xffa040 }),
-    );
-    glow.position.z = 1.1;
+    // Fuselage: a long six-sided cone, tip pointing forward along -z.
+    const body = new THREE.Mesh(new THREE.ConeGeometry(0.55, 2.4, 6).rotateX(-Math.PI / 2), this.hullMat);
+    body.scale.set(1, 0.7, 1);
 
-    this.mesh.add(body, glow);
-    this.mesh.add(new THREE.PointLight(0xffa040, 4, 6).translateZ(1.4));
-    this.mesh.position.y = 1;
+    // Swept wings, built from a flat triangle shape and given a little depth.
+    const wingShape = new THREE.Shape();
+    wingShape.moveTo(0, -0.3);
+    wingShape.lineTo(1.5, 0.8);
+    wingShape.lineTo(1.4, 1.05);
+    wingShape.lineTo(0, 0.85);
+    const wingGeo = new THREE.ExtrudeGeometry(wingShape, { depth: 0.12, bevelEnabled: false }).rotateX(Math.PI / 2);
+    const wings = [1, -1].map((side) => {
+      const wing = new THREE.Mesh(wingGeo, this.hullMat);
+      wing.scale.x = side;
+      wing.position.set(side * 0.2, 0.05, 0);
+      return wing;
+    });
+
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.7).translate(0, 0.3, 0.6), trim);
+
+    const cockpit = new THREE.Mesh(
+      new THREE.SphereGeometry(0.32, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshStandardMaterial({ color: 0x0b1530, emissive: 0x2a6bff, emissiveIntensity: 0.5, metalness: 0.9, roughness: 0.1 }),
+    );
+    cockpit.scale.set(1, 0.8, 1.8);
+    cockpit.position.set(0, 0.18, -0.1);
+
+    this.mesh.add(body, ...wings, fin, cockpit);
+
+    // Two engines with flames that stretch with speed.
+    const engineGeo = new THREE.CylinderGeometry(0.2, 0.26, 0.6, 8).rotateX(Math.PI / 2);
+    const flameGeo = new THREE.ConeGeometry(0.17, 1, 8).rotateX(Math.PI / 2).translate(0, 0, 0.5);
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb060, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
+    for (const side of [-1, 1]) {
+      const engine = new THREE.Mesh(engineGeo, trim);
+      engine.position.set(side * 0.42, 0, 1.0);
+      const flame = new THREE.Mesh(flameGeo, flameMat);
+      flame.position.set(side * 0.42, 0, 1.3);
+      const glow = halo(0xffa040, 1.2, 0.9);
+      glow.position.set(side * 0.42, 0, 1.35);
+      this.flames.push(flame);
+      this.nozzles.push(new THREE.Vector3(side * 0.42, 0, 1.45));
+      this.mesh.add(engine, flame, glow);
+    }
+
+    this.mesh.traverse((o) => {
+      if (o instanceof THREE.Mesh && o.material !== flameMat) o.castShadow = true;
+    });
+    this.mesh.add(new THREE.PointLight(0xffa040, 4, 6).translateZ(1.6));
+    this.mesh.position.set(LEVEL.start.x, 1, LEVEL.start.z);
+  }
+
+  /** How fast the ship is going, 0..1 of boosted top speed. */
+  get speed01(): number {
+    return Math.min(1, this.velocity.length() / (SPEED * BOOST));
+  }
+
+  get isBoosting(): boolean {
+    return this.boosting;
   }
 
   update(dt: number, input: Input): void {
     this.time += dt;
     const { x, z } = input.move;
+    const moving = x !== 0 || z !== 0;
+    this.boosting = input.boost && moving;
     const max = SPEED * (input.boost ? BOOST : 1);
     const target = new THREE.Vector3(x, 0, z).multiplyScalar(max);
     this.velocity.lerp(target, 1 - Math.exp(-ACCEL * dt));
@@ -53,8 +107,16 @@ export class Player {
     if (this.velocity.lengthSq() > 0.05) {
       const yaw = Math.atan2(-this.velocity.x, -this.velocity.z);
       const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+      // Bank into turns: roll by how much the velocity is swinging sideways.
+      const side = new THREE.Vector3(1, 0, 0).applyQuaternion(this.mesh.quaternion);
+      const bank = THREE.MathUtils.clamp(-side.dot(target.clone().sub(this.velocity)) * 0.06, -0.5, 0.5);
+      q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), bank));
       this.mesh.quaternion.slerp(q, 1 - Math.exp(-TURN * dt));
     }
+
+    const flicker = 0.85 + Math.random() * 0.3;
+    const len = (0.3 + this.speed01 * 1.6) * (this.boosting ? 1.4 : 1) * flicker;
+    for (const f of this.flames) f.scale.set(1, 1, len);
     this.mesh.position.y = 1 + Math.sin(this.time * 3) * 0.12;
   }
 
@@ -87,13 +149,27 @@ export class Player {
     return impact;
   }
 
+  /** Leaves a trail of exhaust sparks behind the engines while moving. */
+  exhaust(dt: number, particles: Particles): void {
+    this.emitTimer -= dt;
+    if (this.emitTimer > 0 || this.speed01 < 0.1) return;
+    this.emitTimer = this.boosting ? 0.012 : 0.03;
+    const color = new THREE.Color(this.boosting ? 0xffd080 : 0xff9040);
+    const back = new THREE.Vector3(0, 0, 3).applyQuaternion(this.mesh.quaternion);
+    for (const n of this.nozzles) {
+      const p = n.clone().applyMatrix4(this.mesh.matrixWorld);
+      const v = back.clone().add(new THREE.Vector3().randomDirection().multiplyScalar(0.6));
+      particles.spawn(p, v, color, 0.35 + Math.random() * 0.2);
+    }
+  }
+
   /** Flashes the hull red for a moment after a hit (0..1 strength). */
   setDamageFlash(amount: number): void {
-    this.body.material.emissive.setRGB(amount, 0, 0);
+    this.hullMat.emissive.setRGB(amount, 0, 0);
   }
 
   reset(): void {
-    this.mesh.position.set(0, 1, 0);
+    this.mesh.position.set(LEVEL.start.x, 1, LEVEL.start.z);
     this.mesh.quaternion.identity();
     this.velocity.set(0, 0, 0);
     this.setDamageFlash(0);
