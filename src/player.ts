@@ -14,7 +14,7 @@ const DRAG = 0.8;
 const GRIP = 2.5; // how quickly sideways drift dies away
 const TURN_SPEED = 3.2; // radians per second at full turn
 const TURN = 10;
-const BOUNCE = 0.6;
+export const PLAYER_BOUNCE = 0.6;
 
 export const PLAYER_RADIUS = 0.9;
 
@@ -36,6 +36,8 @@ export class Player {
   private guns: THREE.Vector3[] = [];
   private nextGun = 0;
   private shield: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
+  /** 1 on solid ground, 0 on ice: how much drag and sideways grip there is. */
+  traction = 1;
 
   constructor() {
     const trim = new THREE.MeshStandardMaterial({ color: 0x1d2a44, metalness: 0.6, roughness: 0.4, flatShading: true });
@@ -178,13 +180,15 @@ export class Player {
     const max = SPEED * (this.boosting ? BOOST : 1);
     const along = this.velocity.dot(forward);
     if (thrust > 0) this.velocity.addScaledVector(forward, THRUST * (this.boosting ? BOOST : 1) * dt);
-    else if (thrust < 0) this.velocity.addScaledVector(forward, (along > 0 ? -BRAKE : -REVERSE) * dt);
+    else if (thrust < 0) this.velocity.addScaledVector(forward, (along > 0 ? -BRAKE * (0.3 + 0.7 * this.traction) : -REVERSE) * dt);
     if (thrust < 0 && along < -REVERSE_MAX) this.velocity.addScaledVector(forward, -along - REVERSE_MAX);
 
     // Drag, plus extra grip sideways so the ship drifts a little but still steers.
-    this.velocity.multiplyScalar(Math.exp(-DRAG * dt));
+    // On ice there is hardly any of either, so the ship slides on.
+    const grip = 0.08 + 0.92 * this.traction;
+    this.velocity.multiplyScalar(Math.exp(-DRAG * grip * dt));
     const sideways = new THREE.Vector3(-forward.z, 0, forward.x);
-    this.velocity.addScaledVector(sideways, -this.velocity.dot(sideways) * (1 - Math.exp(-GRIP * dt)));
+    this.velocity.addScaledVector(sideways, -this.velocity.dot(sideways) * (1 - Math.exp(-GRIP * grip * dt)));
     if (this.velocity.length() > max) this.velocity.lerp(this.velocity.clone().setLength(max), 1 - Math.exp(-4 * dt));
     this.mesh.position.addScaledVector(this.velocity, dt);
 
@@ -207,7 +211,7 @@ export class Player {
    * Returns the speed it hit with (0 when nothing was hit).
    */
   collide(rocks: Rock[]): number {
-    return resolveRocks(this.mesh.position, this.velocity, PLAYER_RADIUS, rocks, BOUNCE);
+    return resolveRocks(this.mesh.position, this.velocity, PLAYER_RADIUS, rocks, PLAYER_BOUNCE);
   }
 
   /** Leaves a trail of exhaust sparks behind the engines while thrusting. */
@@ -244,6 +248,7 @@ export class Player {
     this.heading = 0;
     this.turnRate = 0;
     this.velocity.set(0, 0, 0);
+    this.traction = 1;
     this.setDamageFlash(0);
   }
 }

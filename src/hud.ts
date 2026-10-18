@@ -5,6 +5,7 @@ export class Hud {
   private timer = byId('timer');
   private help = byId('help');
   private hullFill = byId('hull-fill');
+  private hullValue = byId('hull-value');
   private shieldRow = byId('shield-row');
   private shieldFill = byId('shield-fill');
   private missilesRow = byId('missiles-row');
@@ -35,7 +36,8 @@ export class Hud {
 
   update(hull: number, collected: number, total: number, killed: number, enemies: number, seconds: number, best: number | null): void {
     this.hullFill.style.width = `${Math.round(hull * 100)}%`;
-    this.hullFill.style.background = hull > 0.5 ? '#4fc3ff' : hull > 0.25 ? '#ffb340' : '#ff4f5e';
+    this.hullFill.dataset.level = hull > 0.5 ? 'ok' : hull > 0.25 ? 'warn' : 'low';
+    this.hullValue.textContent = `${Math.ceil(hull * 100)}%`;
     this.score.innerHTML = `${collected} <small>/ ${total}</small>`;
     this.kills.innerHTML = `${killed} <small>/ ${enemies}</small>`;
     this.time.textContent = formatTime(seconds);
@@ -77,11 +79,12 @@ export class Hud {
     this.hitFlash.classList.add('on');
   }
 
-  showTitle(best: number | null, levels: string[], unlocked: number, bank: number): void {
+  /** `levels` are each level's name and accent colour. */
+  showTitle(best: number | null, levels: { name: string; accent: string }[], unlocked: number, bank: number): void {
     this.titleBank.innerHTML = bank > 0 ? `◆ ${bank} crystals banked · press <kbd>U</kbd> to spend them` : '';
     this.titleBest.textContent = best === null ? '' : `Level 1 best ${formatTime(best)}`;
     this.titleLevels.innerHTML = levels
-      .map((name, i) => `<span class="${i < unlocked ? '' : 'locked'}"><kbd>${i + 1}</kbd> ${name}</span>`)
+      .map(({ name, accent }, i) => `<span class="${i < unlocked ? '' : 'locked'}" style="--accent: ${accent}"><kbd>${i + 1}</kbd> ${name}</span>`)
       .join('');
     this.titlePrompt.textContent = unlocked > 1 ? `Press Enter to launch, or 1 to ${unlocked} to pick a level` : 'Press Enter to launch';
     for (const el of [this.gameOver, this.levelClear]) el.classList.add('hidden');

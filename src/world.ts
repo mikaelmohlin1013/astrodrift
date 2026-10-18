@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { LevelData } from './level';
+import { THEMES, type Theme } from './theme';
 
 export const WORLD_SIZE = 120;
 
@@ -10,59 +11,128 @@ export interface Rock {
   radius: number;
 }
 
+interface WorldParts {
+  sun: THREE.DirectionalLight;
+  hemi: THREE.HemisphereLight;
+  ground: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
+  borderMats: { color: THREE.Color }[];
+  fog: THREE.Fog;
+}
+
+let world: WorldParts | null = null;
+
 // Builds the parts of the scene every level shares: lights, ground, the
 // field border and a starfield. Returns the sun so it can follow the player
-// and keep shadows nearby.
+// and keep shadows nearby. `applyTheme` then colours them for each level.
 export function createWorld(scene: THREE.Scene): { sun: THREE.DirectionalLight } {
-  scene.background = new THREE.Color(0x05070d);
-  scene.fog = new THREE.Fog(0x05070d, 45, 115);
+  const fog = new THREE.Fog(0x05070d, 45, 115);
+  scene.fog = fog;
+  scene.background = fog.color;
 
-  scene.add(new THREE.HemisphereLight(0x8fb4ff, 0x2a1830, 0.7));
+  const hemi = new THREE.HemisphereLight(0x8fb4ff, 0x2a1830, 0.7);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff1dd, 1.8);
   sun.position.set(20, 40, 10);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.bias = -0.0005;
+  sun.shadow.normalBias = 0.03;
   const s = 40;
   Object.assign(sun.shadow.camera, { left: -s, right: s, top: s, bottom: -s, near: 1, far: 120 });
   scene.add(sun, sun.target);
 
-  const groundTex = new THREE.CanvasTexture(groundCanvas(mulberry32(3)));
-  groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
-  groundTex.repeat.set(6, 6);
-  groundTex.colorSpace = THREE.SRGBColorSpace;
-  groundTex.anisotropy = 8;
+  // The ground runs on well past the border so the field never ends in a hard edge.
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE),
-    new THREE.MeshStandardMaterial({ map: groundTex, roughness: 0.95 }),
+    new THREE.PlaneGeometry(WORLD_SIZE * 3, WORLD_SIZE * 3),
+    new THREE.MeshStandardMaterial({ roughness: 0.92, metalness: 0.05, emissive: 0xffffff }),
   );
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   scene.add(ground);
 
-  scene.add(border());
+  const { group, mats } = border();
+  scene.add(group);
   scene.add(starfield());
+  world = { sun, hemi, ground, borderMats: mats, fog };
   return { sun };
 }
 
-const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true });
-const palette = [0x6b5a52, 0x5c5466, 0x75604c, 0x4f4a55].map((c) => new THREE.Color(c));
+const groundMaps = new Map<Theme, { map: THREE.Texture; bump: THREE.Texture; glow: THREE.Texture }>();
+
+/** Recolours the shared scenery: sky, fog, lights, ground and border. */
+export function applyTheme(theme: Theme): void {
+  if (!world) return;
+  world.fog.color.set(theme.sky);
+  world.fog.near = theme.fogNear;
+  world.fog.far = theme.fogFar;
+  world.hemi.color.set(theme.skyLight);
+  world.hemi.groundColor.set(theme.groundLight);
+  world.hemi.intensity = theme.ambient;
+  world.sun.color.set(theme.sun);
+  world.sun.intensity = theme.sunStrength;
+  for (const m of world.borderMats) m.color.set(theme.border);
+
+  let maps = groundMaps.get(theme);
+  if (!maps) {
+    const canvases = groundCanvas(mulberry32(3), theme);
+    const tex = (c: HTMLCanvasElement, srgb: boolean) => {
+      const t = new THREE.CanvasTexture(c);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(18, 18);
+      t.anisotropy = 8;
+      if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    };
+    maps = { map: tex(canvases.color, true), bump: tex(canvases.bump, false), glow: tex(canvases.glow, true) };
+    groundMaps.set(theme, maps);
+  }
+  const mat = world.ground.material;
+  mat.map = maps.map;
+  mat.bumpMap = maps.bump;
+  mat.bumpScale = 1.5;
+  mat.emissiveMap = maps.glow;
+  mat.emissive.set(theme.veins);
+  mat.emissiveIntensity = theme.veinGlow;
+  mat.needsUpdate = true;
+}
+
+const rockMats = new Map<Theme, THREE.MeshStandardMaterial>();
+
+/** The shared rock material for a theme; colours come from each rock's vertices. */
+function rockMaterial(theme: Theme): THREE.MeshStandardMaterial {
+  let mat = rockMats.get(theme);
+  if (!mat) {
+    mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: theme.rockRoughness, metalness: 0.1, flatShading: true });
+    rockMats.set(theme, mat);
+  }
+  return mat;
+}
+
+/** One boulder mesh, sitting on the ground at the origin. */
+export function makeRock(size: number, rand: () => number, theme: Theme): THREE.Mesh {
+  const color = new THREE.Color(theme.rocks[Math.floor(rand() * theme.rocks.length)]);
+  const rock = new THREE.Mesh(rockGeometry(size, rand, color), rockMaterial(theme));
+  rock.position.y = size * 0.45;
+  rock.rotation.set(rand() * 0.6, rand() * Math.PI * 2, rand() * 0.6);
+  rock.scale.y = 0.7 + rand() * 0.4;
+  rock.castShadow = rock.receiveShadow = true;
+  return rock;
+}
 
 // Builds one level's rocks and landing pad into a group, so the whole level
 // can be swapped out later. Returns the rock footprints for collisions.
 export function buildLevel(level: LevelData, seed: number): { group: THREE.Group; rocks: Rock[] } {
+  const theme = THEMES[level.theme];
   const group = new THREE.Group();
   group.add(startPad(level));
   const rand = mulberry32(seed);
   const rocks: Rock[] = [];
   for (const spot of level.rocks) {
-    const r = spot.size;
-    const rock = new THREE.Mesh(rockGeometry(r, rand, palette[Math.floor(rand() * palette.length)]), rockMat);
-    rock.position.set(spot.x, r * 0.45, spot.z);
-    rock.rotation.set(rand() * 0.6, rand() * Math.PI * 2, rand() * 0.6);
-    rock.scale.y = 0.7 + rand() * 0.4;
-    rock.castShadow = rock.receiveShadow = true;
+    const rock = makeRock(spot.size, rand, theme);
+    rock.position.x = spot.x;
+    rock.position.z = spot.z;
     group.add(rock);
-    rocks.push({ x: spot.x, z: spot.z, radius: r * 0.9 });
+    rocks.push({ x: spot.x, z: spot.z, radius: spot.size * 0.9 });
   }
   return { group, rocks };
 }
@@ -128,37 +198,90 @@ function rockGeometry(radius: number, rand: () => number, base: THREE.Color): TH
   return geo;
 }
 
-// Dusty ground tile: speckled noise with a scattering of small craters.
-function groundCanvas(rand: () => number): HTMLCanvasElement {
+// Dusty ground tile in the theme's colours: speckled noise, a scattering of
+// small craters and a few thin cracks. Returns the colour, a height map for
+// bump shading, and a mask of the cracks that glow.
+function groundCanvas(rand: () => number, theme: Theme): { color: HTMLCanvasElement; bump: HTMLCanvasElement; glow: HTMLCanvasElement } {
   const size = 512;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const g = canvas.getContext('2d')!;
-  g.fillStyle = '#1d2436';
-  g.fillRect(0, 0, size, size);
-  for (let i = 0; i < 6000; i++) {
-    const l = 18 + rand() * 22;
-    g.fillStyle = `hsla(${220 + rand() * 30}, 20%, ${l}%, ${0.15 + rand() * 0.2})`;
-    g.fillRect(rand() * size, rand() * size, 1 + rand() * 3, 1 + rand() * 3);
+  const make = (fill: string) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const g = canvas.getContext('2d')!;
+    g.fillStyle = fill;
+    g.fillRect(0, 0, size, size);
+    return { canvas, g };
+  };
+  const color = make(theme.ground);
+  const bump = make('#808080');
+  const glow = make('#000000');
+  // Everything is drawn at the tile's neighbours too, so it wraps seamlessly.
+  const wrapped = (draw: (ox: number, oy: number) => void) => {
+    for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) draw(ox, oy);
+  };
+
+  const [lo, hi] = theme.speckleLight;
+  for (let i = 0; i < 9000; i++) {
+    const l = lo + rand() * (hi - lo);
+    const x = rand() * size;
+    const y = rand() * size;
+    const w = 1 + rand() * 3;
+    color.g.fillStyle = `hsla(${theme.speckleHue + rand() * 30}, 20%, ${l}%, ${0.12 + rand() * 0.2})`;
+    color.g.fillRect(x, y, w, w);
+    bump.g.fillStyle = `rgba(${rand() < 0.5 ? '255,255,255' : '0,0,0'}, ${0.1 + rand() * 0.15})`;
+    bump.g.fillRect(x, y, w, w);
   }
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 12; i++) {
     const x = rand() * size;
     const y = rand() * size;
     const r = 6 + rand() * 26;
-    // Draw each crater on all four sides too so the tile wraps seamlessly.
-    for (const [ox, oy] of [[0, 0], [size, 0], [-size, 0], [0, size], [0, -size]]) {
-      const grad = g.createRadialGradient(x + ox, y + oy, r * 0.2, x + ox, y + oy, r);
-      grad.addColorStop(0, 'rgba(8, 10, 20, 0.55)');
-      grad.addColorStop(0.75, 'rgba(10, 12, 22, 0.25)');
-      grad.addColorStop(0.9, 'rgba(120, 135, 170, 0.22)');
-      grad.addColorStop(1, 'rgba(120, 135, 170, 0)');
-      g.fillStyle = grad;
-      g.beginPath();
-      g.arc(x + ox, y + oy, r, 0, Math.PI * 2);
-      g.fill();
-    }
+    wrapped((ox, oy) => {
+      const grad = color.g.createRadialGradient(x + ox, y + oy, r * 0.2, x + ox, y + oy, r);
+      grad.addColorStop(0, 'rgba(0, 0, 0, 0.45)');
+      grad.addColorStop(0.75, 'rgba(0, 0, 0, 0.2)');
+      grad.addColorStop(0.9, 'rgba(255, 255, 255, 0.05)');
+      grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      color.g.fillStyle = grad;
+      color.g.beginPath();
+      color.g.arc(x + ox, y + oy, r, 0, Math.PI * 2);
+      color.g.fill();
+      // A bowl in the height map, with a raised lip.
+      const b = bump.g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r * 1.15);
+      b.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
+      b.addColorStop(0.75, 'rgba(0, 0, 0, 0.25)');
+      b.addColorStop(0.88, 'rgba(255, 255, 255, 0.3)');
+      b.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      bump.g.fillStyle = b;
+      bump.g.beginPath();
+      bump.g.arc(x + ox, y + oy, r * 1.15, 0, Math.PI * 2);
+      bump.g.fill();
+    });
   }
-  return canvas;
+  // Cracks: wandering lines, sunk into the height map and lit in the glow map.
+  for (let i = 0; i < 4; i++) {
+    const pts: [number, number][] = [[rand() * size, rand() * size]];
+    let a = rand() * Math.PI * 2;
+    for (let k = 0; k < 14; k++) {
+      a += (rand() - 0.5) * 1.2;
+      const [px, py] = pts[pts.length - 1];
+      pts.push([px + Math.cos(a) * 14, py + Math.sin(a) * 14]);
+    }
+    wrapped((ox, oy) => {
+      for (const [g, style, width] of [
+        [bump.g, 'rgba(0,0,0,0.8)', 3],
+        [color.g, 'rgba(0,0,0,0.5)', 2.5],
+        [glow.g, 'rgba(255,255,255,0.18)', 4],
+        [glow.g, 'rgba(255,255,255,0.9)', 1.1],
+      ] as const) {
+        g.strokeStyle = style;
+        g.lineWidth = width;
+        g.lineJoin = 'round';
+        g.beginPath();
+        pts.forEach(([px, py], k) => (k ? g.lineTo(px + ox, py + oy) : g.moveTo(px + ox, py + oy)));
+        g.stroke();
+      }
+    });
+  }
+  return { color: color.canvas, bump: bump.canvas, glow: glow.canvas };
 }
 
 // Glowing landing ring where each run starts.
@@ -172,11 +295,12 @@ function startPad(level: LevelData): THREE.Object3D {
 }
 
 // Short glowing posts along the edge of the playable area.
-function border(): THREE.Object3D {
+function border(): { group: THREE.Object3D; mats: { color: THREE.Color }[] } {
   const group = new THREE.Group();
   const half = WORLD_SIZE / 2 - 1;
   const post = new THREE.CylinderGeometry(0.15, 0.15, 1.6, 6).translate(0, 0.8, 0);
   const mat = new THREE.MeshBasicMaterial({ color: 0xff6b5e });
+  const lineMat = new THREE.LineBasicMaterial({ color: 0xff6b5e, transparent: true, opacity: 0.5 });
   const posts = new THREE.InstancedMesh(post, mat, 4 * 30);
   const m = new THREE.Matrix4();
   let i = 0;
@@ -191,10 +315,10 @@ function border(): THREE.Object3D {
     new THREE.BufferGeometry().setFromPoints(
       [[-half, -half], [half, -half], [half, half], [-half, half]].map(([x, z]) => new THREE.Vector3(x, 0.05, z)),
     ),
-    new THREE.LineBasicMaterial({ color: 0xff6b5e, transparent: true, opacity: 0.5 }),
+    lineMat,
   );
   group.add(line);
-  return group;
+  return { group, mats: [mat, lineMat] };
 }
 
 // Stars of a few colours and sizes on a dome far overhead.

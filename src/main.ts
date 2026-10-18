@@ -1,15 +1,20 @@
 import * as THREE from 'three';
 import { Input } from './input';
-import { Player, PLAYER_RADIUS } from './player';
+import { Player, PLAYER_BOUNCE, PLAYER_RADIUS } from './player';
 import { FollowCamera } from './followCamera';
-import { buildLevel, createWorld, disposeLevel, type Rock } from './world';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { applyTheme, buildLevel, createWorld, disposeLevel, type Rock } from './world';
 import { LEVELS } from './level';
 import { Crystals } from './crystals';
 import { Gate } from './gate';
 import { Enemies } from './enemies';
 import { Bolts } from './weapons';
 import { Hud } from './hud';
-import { Particles } from './fx';
+import { Dust, Particles } from './fx';
+import { Hazards } from './hazards';
+import { Post } from './post';
+import { Radar } from './radar';
+import { THEMES, cssColor } from './theme';
 import { Sfx } from './audio';
 import { Station } from './station';
 import { Missiles } from './missiles';
@@ -33,19 +38,21 @@ const MISSILE_RELOAD = 0.4;
 const MISSILE_RANGE = 40;
 const DOCK_SPEED = 4; // the ship has to be going slower than this to dock
 const DOCK_TIME = 0.7; // seconds of settling on the pad before it docks
+const SIZZLE_EVERY = 0.3; // seconds between hiss sounds while burning
 
 // 'shop' is the upgrade shop, opened from a station or from the title and
 // end-of-level screens; the game is paused while it is open.
 type Phase = 'title' | 'playing' | 'over' | 'cleared' | 'won' | 'shop';
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
+// A soft studio light for reflections, so metal looks like metal.
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.35;
 const { sun } = createWorld(scene);
 const sunOffset = sun.position.clone();
 
@@ -61,6 +68,9 @@ const missiles = new Missiles(scene);
 const station = new Station(scene);
 const shop = new Shop();
 const particles = new Particles(scene);
+const hazards = new Hazards(scene);
+const dust = new Dust(scene);
+const radar = new Radar();
 const sfx = new Sfx();
 const hud = new Hud();
 hud.setSound(!sfx.isMuted);
@@ -79,11 +89,12 @@ stationPointer.scale.setScalar(0.8);
 scene.add(stationPointer);
 
 const follow = new FollowCamera(window.innerWidth / window.innerHeight);
+const post = new Post(renderer, scene, follow.camera);
 
 window.addEventListener('resize', () => {
   follow.camera.aspect = window.innerWidth / window.innerHeight;
   follow.camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  post.resize();
 });
 
 const save = loadSave();
@@ -113,6 +124,7 @@ const state = {
   reload: 0,
   gateOpen: false,
   endedAt: 0,
+  sizzle: 0, // seconds until the next hiss while burning
 };
 
 // The current level's rocks and the gate pylons; turrets are added on top
@@ -122,13 +134,18 @@ let levelGroup: THREE.Group | null = null;
 
 function loadLevel(index: number): void {
   const level = LEVELS[index];
+  const theme = THEMES[level.theme];
   if (levelGroup) disposeLevel(levelGroup);
+  applyTheme(theme);
+  dust.setLook(theme.dust, theme.dustDrift);
   const built = buildLevel(level, 7 + index * 13);
   levelGroup = built.group;
   scene.add(levelGroup);
+  hazards.load(level, theme);
   gate.place(level.gate);
   station.place(level.station);
-  rocks = [...built.rocks, ...gate.pylons, station.mast];
+  rocks = [...built.rocks, ...hazards.rocks, ...gate.pylons, station.mast];
+  radar.load(level, rocks);
   crystals.load(level.crystals);
   enemies.load(level);
   lasers.clear();
@@ -194,6 +211,7 @@ function endRun(won: boolean): void {
     state.pending = 0;
     particles.burst(p, 0xff8a3a, 140, 12, 1.2);
     particles.burst(p, 0xfff0c0, 40, 6, 0.6);
+    follow.shake(0.9);
     sfx.explode();
     hud.showGameOver(state.collected, crystals.total, LEVELS[state.level].name, lost);
   }
@@ -215,12 +233,34 @@ function damage(amount: number): void {
     particles.burst(player.mesh.position, 0x8a9dff, 8 + Math.round(absorbed), 6, 0.4);
   }
   const rest = amount - absorbed;
+  follow.shake(Math.min(0.6, amount / 30));
   if (rest <= 0) return;
   state.hull = Math.max(0, state.hull - rest);
   state.hullFlash = 1;
   hud.flash();
   sfx.hit(rest / HIT_DAMAGE);
   particles.burst(player.mesh.position, 0xffb060, 10 + Math.round(rest), rest * 0.4, 0.5);
+}
+
+/** Slow damage from lava or a well's core: no knock, just heat. */
+function scorch(amount: number, dt: number): void {
+  state.shieldWait = gear.shieldDelay;
+  const absorbed = Math.min(state.shield, amount);
+  state.shield -= absorbed;
+  state.hull = Math.max(0, state.hull - (amount - absorbed));
+  if (absorbed > 0) state.shieldFlash = Math.max(state.shieldFlash, 0.4);
+  else state.hullFlash = Math.max(state.hullFlash, 0.45);
+  state.sizzle -= dt;
+  if (state.sizzle <= 0) {
+    state.sizzle = SIZZLE_EVERY;
+    sfx.sizzle();
+  }
+  const at = player.mesh.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < 2; i++) {
+    v.set((Math.random() - 0.5) * 2, 2 + Math.random() * 2, (Math.random() - 0.5) * 2);
+    particles.spawn(at, v, absorbed > 0 ? new THREE.Color(0x8a9dff) : new THREE.Color(0xff7a2a), 0.4, 0.5);
+  }
 }
 
 /** Moves this run's earnings into the saved bank; returns how many. */
@@ -263,7 +303,7 @@ function closeShop(): void {
   state.phase = state.shopFrom;
   state.endedAt = elapsed;
   if (state.phase === 'playing') hud.message('Undocked · good hunting', 1.5);
-  else if (state.phase === 'title') hud.showTitle(state.best, LEVELS.map((l) => l.name), state.unlocked, save.bank);
+  else if (state.phase === 'title') hud.showTitle(state.best, titleLevels(), state.unlocked, save.bank);
 }
 
 /** Buys the next level of an upgrade if it can be afforded. */
@@ -331,7 +371,7 @@ window.addEventListener('keydown', (e) => {
   } else if (e.code === 'Escape') {
     loadLevel(0);
     state.phase = 'title';
-    hud.showTitle(state.best, LEVELS.map((l) => l.name), state.unlocked, save.bank);
+    hud.showTitle(state.best, titleLevels(), state.unlocked, save.bank);
   } else if (go) {
     if (state.phase === 'over') start(state.level);
     else if (state.phase === 'cleared') start(state.level + 1);
@@ -342,14 +382,16 @@ window.addEventListener('pointerdown', () => sfx.unlock());
 
 loadLevel(0);
 follow.update(0, player.mesh.position, true);
-hud.showTitle(state.best, LEVELS.map((l) => l.name), state.unlocked, save.bank);
+hud.showTitle(state.best, titleLevels(), state.unlocked, save.bank);
 
 const titleTarget = new THREE.Vector3();
 const clock = new THREE.Clock();
 let elapsed = 0;
 renderer.setAnimationLoop(() => {
-  tick(Math.min(clock.getDelta(), 0.05));
-  renderer.render(scene, follow.camera);
+  const raw = clock.getDelta();
+  const dt = Math.min(raw, 0.05);
+  tick(dt);
+  post.render(raw, state.hullFlash);
 });
 
 // Advances the game by one frame.
@@ -362,6 +404,7 @@ function tick(dt: number): void {
     gate.update(dt);
     crystals.update(dt, null);
     particles.update(dt);
+    dust.update(dt, state.shopFrom === 'title' ? titleTarget : p);
     player.setShield(gear.shield ? state.shield / gear.shield : 0, 0);
     hud.update(state.hull / gear.maxHull, state.collected, crystals.total, enemies.total - enemies.alive, enemies.total, state.time, state.best);
     hud.updateGear(state.shield, gear.shield, state.missiles, gear.missiles, save.bank, state.pending);
@@ -372,8 +415,14 @@ function tick(dt: number): void {
 
   if (playing) {
     state.time += dt;
+    const ground = hazards.affect(dt, p, player.velocity);
+    player.traction = ground.traction;
     player.update(dt, input);
-    const impact = player.collide([...rocks, ...enemies.obstacles()]);
+    const impact = Math.max(
+      hazards.collide(p, player.velocity, PLAYER_RADIUS, PLAYER_BOUNCE),
+      player.collide([...rocks, ...enemies.obstacles()]),
+    );
+    if (ground.burn > 0) scorch(ground.burn * dt, dt);
     state.hitTimer = Math.max(0, state.hitTimer - dt);
     if (impact > HIT_MIN_SPEED && state.hitTimer === 0) {
       damage(impact * HIT_DAMAGE);
@@ -445,6 +494,7 @@ function tick(dt: number): void {
   } else {
     crystals.update(dt, null);
   }
+  hazards.update(dt, particles);
 
   // Enemies only notice the ship during a run.
   const events = enemies.update(dt, playing ? p : null, rocks, enemyBolts);
@@ -452,6 +502,7 @@ function tick(dt: number): void {
   if (events.alerts) sfx.alert();
   for (const at of events.rams) {
     particles.burst(at, 0xff4a5a, 60, 9, 0.8);
+    follow.shake(0.4);
     sfx.enemyDie();
     if (playing) damage(RAM_DAMAGE);
   }
@@ -470,6 +521,7 @@ function tick(dt: number): void {
   ]);
   if (playing) state.pending += reward;
   for (const at of missiles.takeBlasts()) {
+    if (playing) follow.shake(0.2);
     particles.burst(at, 0xffb060, 70, 11, 0.7);
     particles.burst(at, 0xfff0c0, 20, 5, 0.4);
   }
@@ -478,6 +530,7 @@ function tick(dt: number): void {
     sfx.enemyHit();
   }
   for (const at of kills) {
+    if (playing) follow.shake(0.3);
     particles.burst(at, 0xff8a3a, 90, 10, 0.9);
     particles.burst(at, 0xfff0c0, 30, 5, 0.5);
     sfx.enemyDie();
@@ -529,6 +582,13 @@ function tick(dt: number): void {
   const focus = state.phase === 'title' ? titleTarget : p;
   sun.target.position.copy(focus);
   sun.position.copy(focus).add(sunOffset);
+  dust.update(dt, focus);
+  radar.update(playing ? p : null, player.yaw, crystals.positions(), enemies.positions(), state.gateOpen ? gate.position : null, station.position);
+}
+
+/** Level names for the title screen, each marked in its theme's colour. */
+function titleLevels(): { name: string; accent: string }[] {
+  return LEVELS.map((l) => ({ name: l.name, accent: cssColor(THEMES[l.theme].veins) }));
 }
 
 // Level 1 keeps the key it had before there were more levels.
@@ -555,7 +615,11 @@ function saveBest(level: number, best: number): void {
 
 function loadUnlocked(): number {
   try {
-    return THREE.MathUtils.clamp(Number(localStorage.getItem('astrodrift.unlocked')) || 1, 1, LEVELS.length);
+    let n = Number(localStorage.getItem('astrodrift.unlocked')) || 1;
+    // Level 4 used to be the last, so clearing it didn't unlock anything;
+    // a best time there means it was cleared.
+    if (n === 4 && loadBest(3) !== null) n = 5;
+    return THREE.MathUtils.clamp(n, 1, LEVELS.length);
   } catch {
     return 1;
   }
@@ -571,5 +635,5 @@ function saveUnlocked(n: number): void {
 
 // Handle for headless tests and debugging in the dev server.
 if (import.meta.env.DEV) {
-  Object.assign(window, { astrodrift: { state, save, gear: () => gear, buy, station, missiles, player, crystals, gate, enemies, lasers, enemyBolts, levels: LEVELS, rocks: () => rocks, start, tick } });
+  Object.assign(window, { astrodrift: { state, save, gear: () => gear, buy, station, missiles, player, crystals, gate, enemies, hazards, lasers, enemyBolts, particles, follow, levels: LEVELS, rocks: () => rocks, start, tick, endRun } });
 }
