@@ -17,8 +17,8 @@ const TEX_W = 9;
 const TEX_L = 16;
 const PX = 128; // pixels per metre
 
-const GREY = '#8c939a';
-const GREY_DARK = '#80878e';
+const GREY = '#7b828a';
+const GREY_DARK = '#737a82';
 const BLUE = '#006aa7';
 const YELLOW = '#fecc02';
 
@@ -39,7 +39,6 @@ export function buildGripen(): GripenModel {
   const paintTex = paintTexture();
   const paint = new THREE.MeshStandardMaterial({ map: paintTex, roughness: 0.62, metalness: 0.18 });
   const finPaint = new THREE.MeshStandardMaterial({ color: GREY, roughness: 0.62, metalness: 0.18 });
-  finPaint.color.convertSRGBToLinear();
   const dark = new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.8, metalness: 0.2 });
   const titanium = new THREE.MeshStandardMaterial({ color: 0x77706a, roughness: 0.38, metalness: 0.9 });
   const glass = new THREE.MeshPhysicalMaterial({
@@ -66,17 +65,23 @@ export function buildGripen(): GripenModel {
   add(
     loft([
       [0.0, 0.02, 0.02, 0.02, 0.0],
-      [0.8, 0.2, 0.18, 0.18, 0.0],
-      [2.0, 0.36, 0.33, 0.32, 0.03],
-      [3.2, 0.45, 0.46, 0.42, 0.06],
-      [4.4, 0.54, 0.52, 0.48, 0.08],
-      [5.4, 0.7, 0.55, 0.52, 0.05],
-      [6.8, 0.74, 0.58, 0.55, 0.05],
-      [9.0, 0.7, 0.58, 0.55, 0.05],
-      [11.0, 0.62, 0.55, 0.52, 0.05],
-      [12.6, 0.54, 0.5, 0.48, 0.05],
-      [13.6, 0.48, 0.46, 0.45, 0.05],
-      [14.0, 0.46, 0.44, 0.44, 0.05],
+      [0.3, 0.15, 0.13, 0.13, 0.0],
+      [0.6, 0.26, 0.22, 0.22, 0.0],
+      [1.0, 0.35, 0.3, 0.3, 0.02],
+      [1.5, 0.44, 0.38, 0.36, 0.04],
+      [2.0, 0.5, 0.44, 0.42, 0.06],
+      [3.6, 0.5, 0.48, 0.46, 0.08],
+      [3.85, 0.62, 0.5, 0.48, 0.07],
+      [4.2, 0.82, 0.52, 0.52, 0.05],
+      [5.0, 0.86, 0.55, 0.55, 0.05],
+      [7.0, 0.88, 0.58, 0.56, 0.05],
+      [9.5, 0.9, 0.58, 0.55, 0.05],
+      [11.0, 0.92, 0.56, 0.54, 0.05],
+      [11.5, 0.88, 0.54, 0.52, 0.05],
+      [12.0, 0.76, 0.52, 0.5, 0.05],
+      [12.6, 0.62, 0.49, 0.47, 0.05],
+      [13.2, 0.5, 0.45, 0.44, 0.05],
+      [13.9, 0.42, 0.42, 0.42, 0.05],
     ]),
     paint,
     true,
@@ -84,29 +89,34 @@ export function buildGripen(): GripenModel {
 
   // Intake mouths, just behind the cockpit on each side.
   for (const s of [-1, 1]) {
-    const mouth = add(new THREE.CircleGeometry(0.22, 16).rotateY(Math.PI), dark);
-    mouth.scale.set(0.9, 1.5, 1);
-    mouth.position.set(s * 0.6, -0.02, z(5.0));
+    const mouth = add(new THREE.CircleGeometry(0.2, 16).rotateY(Math.PI), dark);
+    mouth.scale.set(0.9, 1.6, 1);
+    mouth.position.set(s * 0.72, -0.02, z(3.98));
   }
 
   // Delta wings, low on the fuselage: a 45-degree leading edge, a long
     // clipped tip and a straight trailing edge square to the fuselage.
   for (const s of [-1, 1]) {
     add(
-      plate([[0.6, 6.4], [4.1, 9.0], [4.1, 11.7], [0.6, 11.9]].map(([x, d]) => [x * s, d]), 0.14, -0.02),
+      plate([[0.8, 6.25], [4.3, 9.95], [4.3, 11.15], [0.8, 11.3]].map(([x, d]) => [x * s, d]), 0.14, -0.02),
       paint,
       true,
     );
     // Canards on the intake shoulders.
-    add(plate([[0.65, 4.3], [2.45, 6.0], [2.45, 6.4], [0.65, 6.65]].map(([x, d]) => [x * s, d]), 0.08, 0.36), paint, true);
+    add(plate([[0.8, 4.0], [2.5, 6.6], [2.5, 6.98], [0.8, 6.2]].map(([x, d]) => [x * s, d]), 0.08, 0.36), paint, true);
     // An IRIS-T on each wingtip rail.
-    const missile = add(new THREE.CylinderGeometry(0.08, 0.08, 3.0, 10).rotateX(Math.PI / 2), missileMat);
-    missile.position.set(s * 4.22, -0.05, z(10.25));
+    const missile = add(new THREE.CylinderGeometry(0.08, 0.08, 3.3, 10).rotateX(Math.PI / 2), missileMat);
+    missile.position.set(s * 4.4, -0.05, z(10.3));
+    // Two pylons under each wing, their noses showing ahead of the leading edge.
+    for (const [x, d] of [[1.9, 7.1], [3.2, 8.5]]) {
+      const pylon = add(new THREE.BoxGeometry(0.1, 0.18, 2.2), titanium);
+      pylon.position.set(s * x, -0.2, z(d + 1.1));
+    }
     const seeker = add(new THREE.SphereGeometry(0.08, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(-Math.PI / 2), glass);
-    seeker.position.set(s * 4.22, -0.05, z(8.75));
+    seeker.position.set(s * 4.4, -0.05, z(8.65));
     for (const a of [0, Math.PI / 2]) {
       const fins = add(new THREE.BoxGeometry(0.42, 0.015, 0.3), missileMat);
-      fins.position.set(s * 4.22, -0.05, z(11.6));
+      fins.position.set(s * 4.4, -0.05, z(11.75));
       fins.rotation.z = a;
     }
   }
@@ -117,14 +127,14 @@ export function buildGripen(): GripenModel {
 
   // Bubble canopy with its gold-tinted glazing.
   const canopy = add(new THREE.SphereGeometry(1, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), glass);
-  canopy.scale.set(0.42, 0.5, 1.35);
-  canopy.position.set(0, 0.5, z(3.95));
+  canopy.scale.set(0.36, 0.45, 1.05);
+  canopy.position.set(0, 0.42, z(2.9));
 
   // Engine: a titanium nozzle with a dark throat.
-  const nozzle = add(new THREE.CylinderGeometry(0.4, 0.47, 0.75, 24, 1, true).rotateX(Math.PI / 2), titanium);
-  nozzle.position.set(0, 0.05, z(14.3));
+  const nozzle = add(new THREE.CylinderGeometry(0.36, 0.41, 0.4, 24, 1, true).rotateX(Math.PI / 2), titanium);
+  nozzle.position.set(0, 0.05, z(14.05));
   const throat = add(new THREE.CircleGeometry(0.4, 24), dark);
-  throat.position.set(0, 0.05, z(14.05));
+  throat.position.set(0, 0.05, z(13.92));
 
   // Pitot probe sticking out of the nose.
   const pitot = add(new THREE.CylinderGeometry(0.018, 0.03, 1.1, 6).rotateX(Math.PI / 2), titanium);
@@ -139,8 +149,8 @@ export function buildGripen(): GripenModel {
   return {
     group: g,
     paint: [paint, finPaint],
-    nozzle: new THREE.Vector3(0, 0.05 * S, z(14.7) * S),
-    muzzles: [-1, 1].map((s) => new THREE.Vector3(s * 0.65 * S, -0.3 * S, z(5) * S)),
+    nozzle: new THREE.Vector3(0, 0.05 * S, z(14.25) * S),
+    muzzles: [-1, 1].map((s) => new THREE.Vector3(s * 0.8 * S, -0.3 * S, z(5) * S)),
   };
 }
 
@@ -263,28 +273,28 @@ function paintTexture(): THREE.Texture {
   };
   for (const s of [-1, 1]) {
     // Elevons, split in two along the trailing edge.
-    line([[0.75 * s, 11.15], [4.0 * s, 11.0]]);
-    line([[2.35 * s, 11.08], [2.35 * s, 11.8]]);
+    line([[0.95 * s, 10.6], [4.1 * s, 10.5]]);
+    line([[2.4 * s, 10.55], [2.4 * s, 11.2]]);
     // Leading-edge flaps.
-    line([[1.4 * s, 7.25], [4.0 * s, 9.2]]);
+    line([[1.3 * s, 7.05], [4.1 * s, 10.05]]);
     // Canard hinge line.
-    line([[0.75 * s, 5.75], [2.4 * s, 6.15]]);
+    line([[0.9 * s, 5.9], [2.45 * s, 6.65]]);
     // Fuselage panels and the intake lip.
-    line([[0.42 * s, 2.5], [0.42 * s, 13.5]]);
-    line([[0.68 * s, 5.1], [0.72 * s, 6.4]]);
+    line([[0.4 * s, 2.0], [0.4 * s, 13.5]]);
+    line([[0.8 * s, 4.2], [0.86 * s, 6.5]]);
   }
-  for (const d of [6.8, 9.0, 11.0, 12.6]) line([[-0.7, d], [0.7, d]]);
+  for (const d of [7.0, 9.5, 11.0, 12.6]) line([[-0.85, d], [0.85, d]]);
   // The radome joint and the canopy frame.
   g.lineWidth = 0.035;
-  line([[-0.38, 1.6], [0.38, 1.6]]);
+  line([[-0.4, 1.4], [0.4, 1.4]]);
   g.beginPath();
-  g.ellipse(0, 3.95, 0.44, 1.38, 0, 0, Math.PI * 2);
+  g.ellipse(0, 2.9, 0.38, 1.08, 0, 0, Math.PI * 2);
   g.stroke();
   // Walkway dots and stencils near the spine.
   g.fillStyle = 'rgba(40, 44, 48, 0.5)';
   for (let d = 6.8; d < 12; d += 0.35) g.fillRect(-0.04, d, 0.08, 0.04);
 
-  for (const s of [-1, 1]) roundel(g, 2.55 * s, 10.25, 0.55);
+  for (const s of [-1, 1]) roundel(g, 2.6 * s, 9.85, 0.5);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
