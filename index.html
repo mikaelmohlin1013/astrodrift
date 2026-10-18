@@ -8,39 +8,91 @@
       html, body { margin: 0; height: 100%; overflow: hidden; background: #05070d; }
       canvas { display: block; }
       .overlay { position: fixed; color: #cfe3ff; font: 14px/1.4 system-ui, sans-serif; pointer-events: none; }
-      #help { left: 16px; bottom: 16px; opacity: 0.8; }
+      .hidden { display: none !important; }
+      #help { left: 16px; bottom: 16px; opacity: 0.75; }
       #stats { left: 16px; top: 16px; display: grid; gap: 6px; }
       #hull { width: 180px; height: 10px; border-radius: 5px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
       #hull-fill { height: 100%; width: 100%; transition: width 0.15s; }
       .label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7; }
       #score { font-size: 28px; font-weight: 600; color: #6affd8; }
+      #score small { font-size: 16px; opacity: 0.6; }
+      #timer { right: 16px; top: 16px; text-align: right; display: grid; gap: 4px; }
+      #time { font-size: 24px; font-variant-numeric: tabular-nums; font-weight: 600; }
+      #sound { right: 16px; bottom: 16px; opacity: 0.6; }
+      #toast {
+        left: 50%; top: 18%; transform: translateX(-50%); font-size: 22px; font-weight: 600; letter-spacing: 0.04em;
+        text-shadow: 0 0 16px rgba(154, 123, 255, 0.9); opacity: 0; transition: opacity 0.3s;
+      }
+      #toast.on { opacity: 1; }
       #hit-flash { inset: 0; box-shadow: inset 0 0 120px rgba(255, 60, 70, 0.9); opacity: 0; }
       #hit-flash.on { animation: hit 0.4s ease-out; }
       @keyframes hit { from { opacity: 1; } to { opacity: 0; } }
-      #game-over {
+      .panel {
         inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 8px; background: rgba(5, 7, 13, 0.6); text-align: center;
+        gap: 10px; background: rgba(5, 7, 13, 0.55); text-align: center;
       }
-      #game-over[hidden] { display: none; }
-      #game-over h1 { margin: 0; font-size: 40px; letter-spacing: 0.04em; }
-      #final-score { font-size: 20px; color: #6affd8; }
+      .panel h1 { margin: 0; font-size: 40px; letter-spacing: 0.04em; }
+      .panel .result { font-size: 20px; color: #6affd8; }
+      .prompt { margin-top: 12px; animation: blink 1.4s ease-in-out infinite; }
+      @keyframes blink { 50% { opacity: 0.35; } }
+      #title { background: radial-gradient(ellipse at center, rgba(5, 7, 13, 0.25), rgba(5, 7, 13, 0.85)); }
+      #title h1 {
+        font-size: clamp(44px, 10vw, 96px); font-weight: 800; letter-spacing: 0.12em;
+        background: linear-gradient(180deg, #e8f4ff 20%, #6affd8 60%, #9a7bff);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+        filter: drop-shadow(0 0 24px rgba(106, 255, 216, 0.35));
+      }
+      #title .tagline { font-size: 18px; max-width: 30em; opacity: 0.9; }
+      #title .keys { display: grid; grid-template-columns: auto auto; gap: 6px 16px; margin-top: 18px; text-align: left; opacity: 0.85; }
+      kbd {
+        display: inline-block; min-width: 1.4em; padding: 1px 6px; border: 1px solid rgba(207, 227, 255, 0.4);
+        border-bottom-width: 2px; border-radius: 4px; font: 12px/1.5 ui-monospace, monospace; text-align: center;
+      }
+      #title .prompt { font-size: 20px; color: #6affd8; }
     </style>
   </head>
   <body>
     <div id="hit-flash" class="overlay"></div>
-    <div id="stats" class="overlay">
+    <div id="stats" class="overlay hidden">
       <span class="label">Hull</span>
       <div id="hull"><div id="hull-fill"></div></div>
       <span class="label">Crystals</span>
       <span id="score">0</span>
-      <span class="label">Best <span id="best">0</span></span>
     </div>
-    <div id="help" class="overlay">WASD / arrow keys to move · Shift to boost · Collect crystals, avoid rocks</div>
-    <div id="game-over" class="overlay" hidden>
+    <div id="timer" class="overlay hidden">
+      <span class="label">Time</span>
+      <span id="time">0.0</span>
+      <span class="label">Best <span id="best">--</span></span>
+    </div>
+    <div id="toast" class="overlay"></div>
+    <div id="help" class="overlay hidden">WASD / arrows to fly · Shift to boost · Collect every crystal, then fly through the gate</div>
+    <div id="sound" class="overlay"><kbd>M</kbd> sound <span id="sound-state">on</span></div>
+
+    <div id="title" class="overlay panel">
+      <h1>ASTRODRIFT</h1>
+      <div class="tagline">Pick up every crystal in the field, then fly through the gate at the far end. Mind the rocks.</div>
+      <div class="keys">
+        <span><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or arrows</span><span>fly</span>
+        <span><kbd>Shift</kbd></span><span>boost</span>
+        <span><kbd>M</kbd></span><span>sound on / off</span>
+      </div>
+      <div id="title-best" class="label"></div>
+      <div class="prompt">Press Enter to launch</div>
+    </div>
+
+    <div id="game-over" class="overlay panel hidden">
       <h1>Hull destroyed</h1>
-      <div id="final-score"></div>
-      <div>Press Enter to fly again</div>
+      <div id="final-score" class="result"></div>
+      <div class="prompt">Press Enter to fly again</div>
     </div>
+
+    <div id="level-clear" class="overlay panel hidden">
+      <h1>Level clear</h1>
+      <div id="clear-time" class="result"></div>
+      <div id="clear-detail"></div>
+      <div class="prompt">Press Enter to fly again</div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
