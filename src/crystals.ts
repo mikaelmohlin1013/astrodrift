@@ -104,6 +104,11 @@ export class Crystals {
     }
   }
 
+  /** Where the crystals still in play are, for the radar. */
+  positions(): THREE.Vector3[] {
+    return this.items.filter((c) => !c.taken).map((c) => c.group.position);
+  }
+
   /** Nearest crystal still in play, for the HUD pointer. */
   nearest(p: THREE.Vector3): THREE.Vector3 | null {
     let best: THREE.Vector3 | null = null;

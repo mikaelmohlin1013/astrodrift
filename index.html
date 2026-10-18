@@ -5,79 +5,126 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AstroDrift</title>
     <style>
+      :root {
+        --ink: #d6e8ff;
+        --dim: rgba(214, 232, 255, 0.62);
+        --glass: rgba(10, 18, 32, 0.52);
+        --edge: rgba(150, 200, 255, 0.18);
+        --teal: #6affd8;
+        --blue: #4fc3ff;
+        --violet: #9a7bff;
+        --red: #ff5a6e;
+        --amber: #ffb340;
+        --green: #7dff8a;
+      }
       html, body { margin: 0; height: 100%; overflow: hidden; background: #05070d; }
       canvas { display: block; }
-      .overlay { position: fixed; color: #cfe3ff; font: 14px/1.4 system-ui, sans-serif; pointer-events: none; }
+      .overlay { position: fixed; color: var(--ink); font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif; pointer-events: none; }
       .hidden { display: none !important; }
-      #help { left: 16px; bottom: 16px; opacity: 0.75; }
-      #stats { left: 16px; top: 16px; display: grid; gap: 6px; }
-      #hull { width: 180px; height: 10px; border-radius: 5px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
-      #hull-fill { height: 100%; width: 100%; transition: width 0.15s; }
-      .label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7; }
-      #score { font-size: 28px; font-weight: 600; color: #6affd8; }
-      #score small, #kills small { font-size: 16px; opacity: 0.6; }
-      #kills { font-size: 22px; font-weight: 600; color: #ff7a86; }
-      #level-name { font-weight: 600; letter-spacing: 0.04em; margin-bottom: 4px; }
-      #timer { right: 16px; top: 16px; text-align: right; display: grid; gap: 4px; }
-      #time { font-size: 24px; font-variant-numeric: tabular-nums; font-weight: 600; }
-      #sound { right: 16px; bottom: 16px; opacity: 0.6; }
-      #toast {
-        left: 50%; top: 18%; transform: translateX(-50%); font-size: 22px; font-weight: 600; letter-spacing: 0.04em;
-        text-shadow: 0 0 16px rgba(154, 123, 255, 0.9); opacity: 0; transition: opacity 0.3s;
+      .card {
+        background: linear-gradient(160deg, rgba(30, 48, 80, 0.45), var(--glass));
+        border: 1px solid var(--edge); border-radius: 12px; padding: 10px 14px;
+        backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
       }
-      #toast.on { opacity: 1; }
-      #hit-flash { inset: 0; box-shadow: inset 0 0 120px rgba(255, 60, 70, 0.9); opacity: 0; }
+      #help { left: 16px; bottom: 14px; font-size: 12px; color: var(--dim); animation: fade-help 1s 12s forwards; }
+      @keyframes fade-help { to { opacity: 0; } }
+      #stats { left: 16px; top: 16px; display: grid; gap: 7px; width: 210px; }
+      .label { font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
+      .row { display: flex; justify-content: space-between; align-items: baseline; }
+      .bar { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; position: relative; }
+      /* Faint notches every tenth, so the bar reads as segments. */
+      .bar::after {
+        content: ''; position: absolute; inset: 0;
+        background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgba(5, 7, 13, 0.6) calc(10% - 1px) 10%);
+      }
+      .fill { height: 100%; width: 100%; border-radius: 4px; transition: width 0.15s; }
+      #hull-fill { background: linear-gradient(90deg, #2a8cff, var(--blue)); box-shadow: 0 0 10px rgba(79, 195, 255, 0.7); }
+      #hull-fill[data-level='warn'] { background: linear-gradient(90deg, #ff8a2a, var(--amber)); box-shadow: 0 0 10px rgba(255, 179, 64, 0.7); }
+      #hull-fill[data-level='low'] { background: linear-gradient(90deg, #ff2a4a, var(--red)); box-shadow: 0 0 12px rgba(255, 90, 110, 0.9); animation: pulse 0.6s ease-in-out infinite; }
+      @keyframes pulse { 50% { opacity: 0.55; } }
+      #hull-value { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+      #shield { height: 5px; }
+      #shield-fill { background: linear-gradient(90deg, #6a7dff, #a8b6ff); box-shadow: 0 0 8px #8a9dff; transition: width 0.1s; }
+      #shield-row { display: grid; gap: 4px; }
+      #missiles { font-size: 13px; letter-spacing: 3px; color: #ffb060; text-shadow: 0 0 8px rgba(255, 176, 96, 0.6); }
+      #missiles small { letter-spacing: 0; opacity: 0.7; font-size: 11px; }
+      #level-name { font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--teal); }
+      .counts { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 2px; }
+      #score { font-size: 24px; font-weight: 700; color: var(--teal); text-shadow: 0 0 12px rgba(106, 255, 216, 0.45); font-variant-numeric: tabular-nums; }
+      #score small, #kills small { font-size: 13px; opacity: 0.55; font-weight: 500; }
+      #kills { font-size: 24px; font-weight: 700; color: #ff7a86; text-shadow: 0 0 12px rgba(255, 90, 110, 0.4); font-variant-numeric: tabular-nums; }
+      #timer { right: 16px; top: 16px; text-align: right; display: grid; gap: 2px; min-width: 120px; }
+      #time { font-size: 26px; font-variant-numeric: tabular-nums; font-weight: 700; letter-spacing: 0.02em; }
+      #radar { right: 16px; top: 128px; width: 150px; height: 150px; border-radius: 50%; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4); }
+      #sound { right: 16px; bottom: 14px; font-size: 12px; color: var(--dim); }
+      #toast {
+        left: 50%; top: 16%; transform: translate(-50%, -8px); font-size: 18px; font-weight: 600; letter-spacing: 0.06em;
+        padding: 8px 20px; border-radius: 999px; white-space: nowrap;
+        background: rgba(12, 16, 34, 0.55); border: 1px solid rgba(154, 123, 255, 0.35);
+        text-shadow: 0 0 14px rgba(154, 123, 255, 0.9); box-shadow: 0 0 24px rgba(154, 123, 255, 0.2);
+        opacity: 0; transition: opacity 0.3s, transform 0.3s;
+      }
+      #toast.on { opacity: 1; transform: translate(-50%, 0); }
+      #hit-flash { inset: 0; box-shadow: inset 0 0 140px rgba(255, 60, 70, 0.9); opacity: 0; }
       #hit-flash.on { animation: hit 0.4s ease-out; }
       @keyframes hit { from { opacity: 1; } to { opacity: 0; } }
       .panel {
         inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 10px; background: rgba(5, 7, 13, 0.55); text-align: center;
+        gap: 10px; background: radial-gradient(ellipse at center, rgba(5, 7, 13, 0.35), rgba(5, 7, 13, 0.8)); text-align: center;
       }
-      .panel h1 { margin: 0; font-size: 40px; letter-spacing: 0.04em; }
-      .panel .result { font-size: 20px; color: #6affd8; }
+      .panel > .card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 26px 40px; border-radius: 18px; }
+      .panel h1 { margin: 0; font-size: 40px; letter-spacing: 0.06em; }
+      .panel .result { font-size: 20px; color: var(--teal); }
+      #game-over h1 { color: #ff8a96; text-shadow: 0 0 24px rgba(255, 90, 110, 0.6); }
+      #level-clear h1 { color: #c8b8ff; text-shadow: 0 0 24px rgba(154, 123, 255, 0.7); }
       .prompt { margin-top: 12px; animation: blink 1.4s ease-in-out infinite; }
       @keyframes blink { 50% { opacity: 0.35; } }
-      #title { background: radial-gradient(ellipse at center, rgba(5, 7, 13, 0.25), rgba(5, 7, 13, 0.85)); }
+      #title { background: radial-gradient(ellipse at center, rgba(5, 7, 13, 0.15), rgba(5, 7, 13, 0.85)); }
       #title h1 {
-        font-size: clamp(44px, 10vw, 96px); font-weight: 800; letter-spacing: 0.12em;
-        background: linear-gradient(180deg, #e8f4ff 20%, #6affd8 60%, #9a7bff);
+        font-size: clamp(44px, 10vw, 96px); font-weight: 800; letter-spacing: 0.16em; margin-right: -0.16em;
+        background: linear-gradient(180deg, #ffffff 15%, var(--teal) 55%, var(--violet));
         -webkit-background-clip: text; background-clip: text; color: transparent;
-        filter: drop-shadow(0 0 24px rgba(106, 255, 216, 0.35));
+        filter: drop-shadow(0 0 28px rgba(106, 255, 216, 0.45));
       }
-      #title .tagline { font-size: 18px; max-width: 30em; opacity: 0.9; }
-      #title .keys { display: grid; grid-template-columns: auto auto; gap: 6px 16px; margin-top: 18px; text-align: left; opacity: 0.85; }
+      #title .tagline { font-size: 17px; max-width: 32em; color: var(--dim); }
+      #title .keys {
+        display: grid; grid-template-columns: auto auto; gap: 6px 16px; margin-top: 14px; text-align: left; font-size: 13px;
+      }
       kbd {
-        display: inline-block; min-width: 1.4em; padding: 1px 6px; border: 1px solid rgba(207, 227, 255, 0.4);
-        border-bottom-width: 2px; border-radius: 4px; font: 12px/1.5 ui-monospace, monospace; text-align: center;
+        display: inline-block; min-width: 1.4em; padding: 1px 6px; border: 1px solid rgba(207, 227, 255, 0.35);
+        border-bottom-width: 2px; border-radius: 5px; font: 12px/1.5 ui-monospace, monospace; text-align: center;
+        background: rgba(255, 255, 255, 0.05);
       }
-      #title .prompt { font-size: 20px; color: #6affd8; }
-      #title-levels { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 20px; margin-top: 14px; }
+      #title .prompt { font-size: 20px; color: var(--teal); text-shadow: 0 0 14px rgba(106, 255, 216, 0.6); }
+      #title-levels { display: grid; grid-template-columns: repeat(4, minmax(0, 150px)); gap: 8px; margin-top: 16px; }
+      @media (max-width: 660px) { #title-levels { grid-template-columns: repeat(2, minmax(0, 150px)); } }
+      #title-levels span {
+        display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 9px; font-size: 13px; text-align: left;
+        background: rgba(20, 32, 56, 0.55); border: 1px solid var(--edge); border-left: 3px solid var(--accent, var(--teal));
+      }
       #title-levels .locked { opacity: 0.3; }
-      #title-bank { color: #6affd8; }
-      #shield { width: 180px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; margin-top: 3px; }
-      #shield-fill { height: 100%; width: 100%; background: #8a9dff; box-shadow: 0 0 8px #8a9dff; transition: width 0.1s; }
-      #missiles { font-size: 16px; letter-spacing: 3px; color: #ffb060; }
-      #missiles small { letter-spacing: 0; opacity: 0.7; }
-      #bank { color: #6affd8; font-weight: 600; }
-      #bank small { color: #cfe3ff; font-weight: 400; opacity: 0.7; }
-      .gem { color: #6affd8; }
-      #shop { background: rgba(5, 7, 13, 0.8); pointer-events: auto; overflow-y: auto; justify-content: safe center; padding: 16px; box-sizing: border-box; }
-      #shop h1 { font-size: 34px; color: #7dff8a; text-shadow: 0 0 18px rgba(125, 255, 138, 0.45); }
-      #shop-service { color: #7dff8a; }
+      #title-bank { color: var(--teal); }
+      #bank { color: var(--teal); font-weight: 600; margin-top: 2px; }
+      #bank small { color: var(--ink); font-weight: 400; opacity: 0.7; }
+      .gem { color: var(--teal); }
+      #shop { background: rgba(5, 7, 13, 0.82); pointer-events: auto; overflow-y: auto; justify-content: safe center; padding: 16px; box-sizing: border-box; }
+      #shop h1 { font-size: 34px; color: var(--green); text-shadow: 0 0 18px rgba(125, 255, 138, 0.45); }
+      #shop-service { color: var(--green); }
       #shop-bank { font-size: 20px; font-weight: 600; }
       #shop-list { display: grid; grid-template-columns: repeat(2, minmax(0, 300px)); gap: 8px; margin-top: 6px; text-align: left; }
       @media (max-width: 660px) { #shop-list { grid-template-columns: minmax(0, 340px); } }
       .item {
         display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 8px 12px; cursor: pointer; user-select: none;
-        border: 1px solid rgba(207, 227, 255, 0.18); border-radius: 8px; background: rgba(20, 28, 48, 0.65);
+        border: 1px solid rgba(207, 227, 255, 0.16); border-radius: 10px; background: rgba(20, 28, 48, 0.65);
       }
-      .item.sel { border-color: #7dff8a; background: rgba(28, 50, 40, 0.75); box-shadow: 0 0 16px rgba(125, 255, 138, 0.25); }
+      .item.sel { border-color: var(--green); background: rgba(28, 50, 40, 0.75); box-shadow: 0 0 16px rgba(125, 255, 138, 0.25); }
       .item .name { font-weight: 600; }
-      .item .pips { margin-left: 4px; font-size: 10px; letter-spacing: 2px; color: #7dff8a; }
+      .item .pips { margin-left: 4px; font-size: 10px; letter-spacing: 2px; color: var(--green); }
       .item .price { font-weight: 600; text-align: right; }
       .item .desc { grid-column: 1 / -1; font-size: 12px; opacity: 0.75; }
       .item.cant .price { color: #ff7a86; }
-      .item.maxed .price { color: #7dff8a; }
+      .item.maxed .price { color: var(--green); }
       .item.deny { animation: shake 0.25s; }
       @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
       #shop-info { min-height: 1.4em; opacity: 0.85; }
@@ -86,23 +133,26 @@
   </head>
   <body>
     <div id="hit-flash" class="overlay"></div>
-    <div id="stats" class="overlay hidden">
+    <div id="stats" class="overlay card hidden">
       <span id="level-name"></span>
-      <span class="label">Hull</span>
-      <div id="hull"><div id="hull-fill"></div></div>
-      <div id="shield-row" class="hidden"><span class="label">Shield</span><div id="shield"><div id="shield-fill"></div></div></div>
+      <div class="row"><span class="label">Hull</span><span id="hull-value">100</span></div>
+      <div id="hull" class="bar"><div id="hull-fill" class="fill"></div></div>
+      <div id="shield-row" class="hidden"><span class="label">Shield</span><div id="shield" class="bar"><div id="shield-fill" class="fill"></div></div></div>
       <div id="missiles-row" class="hidden"><span class="label">Missiles</span><br /><span id="missiles"></span></div>
-      <span class="label">Crystals</span>
-      <span id="score">0</span>
-      <span class="label">Enemies destroyed</span>
-      <span id="kills">0</span>
+      <div class="counts">
+        <span class="label">Crystals</span>
+        <span class="label">Enemies</span>
+        <span id="score">0</span>
+        <span id="kills">0</span>
+      </div>
     </div>
-    <div id="timer" class="overlay hidden">
+    <div id="timer" class="overlay card hidden">
       <span class="label">Time</span>
       <span id="time">0.0</span>
       <span class="label">Best <span id="best">--</span></span>
       <span id="bank"></span>
     </div>
+    <canvas id="radar" class="overlay hidden"></canvas>
     <div id="toast" class="overlay"></div>
     <div id="help" class="overlay hidden">W / ↑ thrust · A D / ← → turn · S / ↓ brake · Shift boost · Space fire · E missile · Land slowly on the green pad to repair and upgrade</div>
     <div id="sound" class="overlay"><kbd>M</kbd> sound <span id="sound-state">on</span></div>
@@ -127,16 +177,20 @@
     </div>
 
     <div id="game-over" class="overlay panel hidden">
-      <h1>Hull destroyed</h1>
-      <div id="final-score" class="result"></div>
-      <div id="over-prompt" class="prompt">Press Enter to fly again</div>
+      <div class="card">
+        <h1>Hull destroyed</h1>
+        <div id="final-score" class="result"></div>
+        <div id="over-prompt" class="prompt">Press Enter to fly again</div>
+      </div>
     </div>
 
     <div id="level-clear" class="overlay panel hidden">
-      <h1 id="clear-title">Level clear</h1>
-      <div id="clear-time" class="result"></div>
-      <div id="clear-detail"></div>
-      <div id="clear-prompt" class="prompt">Press Enter to fly again</div>
+      <div class="card">
+        <h1 id="clear-title">Level clear</h1>
+        <div id="clear-time" class="result"></div>
+        <div id="clear-detail"></div>
+        <div id="clear-prompt" class="prompt">Press Enter to fly again</div>
+      </div>
     </div>
 
     <div id="shop" class="overlay panel hidden">

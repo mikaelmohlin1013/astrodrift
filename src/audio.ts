@@ -116,6 +116,11 @@ export class Sfx {
     this.noiseBurst(0, 0.06, 900, 400, 0.08);
   }
 
+  /** Hiss of the hull scorching on lava or in a gravity well's core. */
+  sizzle(): void {
+    this.noiseBurst(0, 0.3, 5000, 1500, 0.12);
+  }
+
   gateOpen(): void {
     [392, 494, 587, 784].forEach((f, i) => this.tone(f, i * 0.09, 0.6, 'sine', 0.16));
   }

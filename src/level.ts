@@ -2,6 +2,10 @@
 // the south edge and ends at a gate in the north; the gate only opens once
 // every crystal has been picked up. Each has a repair station partway along. Later levels have more enemies:
 // turrets that sit still and shoot, and chasers that wake up and ram you.
+// Levels 5 to 8 each add a hazard: ice that the ship slides on, lava that
+// burns the hull, drifting asteroids, and gravity wells that pull the ship in.
+
+import type { ThemeName } from './theme';
 
 export interface RockSpot {
   x: number;
@@ -14,8 +18,42 @@ export interface Spot {
   z: number;
 }
 
+/** A round patch of ground: ice or lava. */
+export interface Patch {
+  x: number;
+  z: number;
+  radius: number;
+}
+
+/** A boulder sliding east (vx > 0) or west along its row, wrapping round the field. */
+export interface Drifter {
+  x: number;
+  z: number;
+  size: number;
+  vx: number;
+}
+
+/** A boulder circling a point; `speed` is in radians a second, negative for clockwise. */
+export interface Orbiter {
+  x: number;
+  z: number;
+  radius: number;
+  speed: number;
+  phase: number;
+  size: number;
+}
+
+/** Pulls the ship towards its centre, harder the closer it gets; the core burns. */
+export interface Well {
+  x: number;
+  z: number;
+  radius: number;
+  pull: number;
+}
+
 export interface LevelData {
   name: string;
+  theme: ThemeName;
   start: Spot;
   gate: Spot;
   /** The repair station pad, somewhere safe partway through. */
@@ -24,6 +62,11 @@ export interface LevelData {
   crystals: Spot[];
   turrets: Spot[];
   chasers: Spot[];
+  ice?: Patch[];
+  lava?: Patch[];
+  drifters?: Drifter[];
+  orbiters?: Orbiter[];
+  wells?: Well[];
 }
 
 // A row of touching boulders from (x1, z1) to (x2, z2), skipping any that
@@ -94,6 +137,7 @@ function driftField(): LevelData {
   );
   return {
     name: 'Drift Field',
+    theme: 'dusk',
     start: { x: 0, z: 50 },
     gate: { x: 0, z: -52 },
     station: { x: -22, z: 10 },
@@ -145,6 +189,7 @@ function crossfire(): LevelData {
   );
   return {
     name: 'Crossfire',
+    theme: 'dusk',
     start: { x: 0, z: 52 },
     gate: { x: 0, z: -52 },
     station: { x: -4, z: 4 },
@@ -205,6 +250,7 @@ function switchyard(): LevelData {
   );
   return {
     name: 'Switchyard',
+    theme: 'dusk',
     start: { x: 0, z: 52 },
     gate: { x: 0, z: -53 },
     station: { x: 12, z: 1 },
@@ -265,6 +311,7 @@ function hive(): LevelData {
   );
   return {
     name: 'The Hive',
+    theme: 'dusk',
     start: { x: 0, z: 52 },
     gate: { x: 0, z: -53 },
     station: { x: -8, z: -10 },
@@ -308,4 +355,328 @@ function hive(): LevelData {
   };
 }
 
-export const LEVELS: LevelData[] = [driftField(), crossfire(), switchyard(), hive()];
+
+// A river of lava running east-west, wobbling north and south, with dry
+// crossings where the gaps are (ranges along x).
+function river(out: Patch[], z: number, wobble: number, gaps: [number, number][]): void {
+  const r = 4.2;
+  for (let x = -60; x <= 60; x += 5) {
+    if (gaps.some(([from, to]) => x + r > from && x - r < to)) continue;
+    out.push({ x, z: z + Math.sin(x * 0.08) * wobble, radius: r });
+  }
+}
+
+// A row of asteroids evenly spaced across the field, all sliding the same way.
+function lane(out: Drifter[], z: number, count: number, vx: number, sizes: number[]): void {
+  for (let i = 0; i < count; i++) {
+    out.push({ x: -60 + (i + 0.5) * (120 / count), z, size: sizes[i % sizes.length], vx });
+  }
+}
+
+// Level 5: frozen ground with wide ice patches where the ship can't grip, so
+// it slides on towards the walls. The gaps sit just past the ice.
+function frostbite(): LevelData {
+  const rocks: RockSpot[] = [];
+  wall(rocks, -58, 20, 58, 20, 2.2, [[-8, 4]]);
+  wall(rocks, -58, -12, 58, -12, 2.2, [[-48, -38], [36, 46]]);
+  wall(rocks, -58, -40, 58, -40, 2.2, [[-6, 6]]);
+  rocks.push(
+    { x: -20, z: 40, size: 2.2 },
+    { x: 20, z: 46, size: 1.6 },
+    { x: -40, z: 32, size: 1.8 },
+    { x: 48, z: 26, size: 1.4 },
+    { x: -12, z: 6, size: 1.6 },
+    { x: 40, z: 10, size: 2.0 },
+    { x: -50, z: -24, size: 1.6 },
+    { x: 18, z: -26, size: 2.2 },
+    { x: 44, z: -28, size: 1.4 },
+    { x: -24, z: -48, size: 1.8 },
+    { x: 24, z: -48, size: 1.6 },
+    { x: -9, z: -48, size: 1.0 },
+    { x: 9, z: -48, size: 1.0 },
+  );
+  return {
+    name: 'Frostbite',
+    theme: 'ice',
+    start: { x: 0, z: 52 },
+    gate: { x: 0, z: -53 },
+    station: { x: 12, z: 2 },
+    rocks,
+    ice: [
+      { x: 0, z: 32, radius: 11 },
+      { x: -30, z: 6, radius: 12 },
+      { x: 30, z: -2, radius: 12 },
+      { x: -4, z: -26, radius: 12 },
+      { x: 38, z: 36, radius: 8 },
+    ],
+    crystals: [
+      { x: 0, z: 32 },
+      { x: -8, z: 40 },
+      { x: 8, z: 26 },
+      { x: 38, z: 36 },
+      { x: -36, z: 26 },
+      { x: -30, z: 6 },
+      { x: -20, z: -2 },
+      { x: 12, z: 12 },
+      { x: 30, z: -2 },
+      { x: 50, z: -4 },
+      { x: -43, z: -12 },
+      { x: 41, z: -12 },
+      { x: -4, z: -26 },
+      { x: 10, z: -32 },
+      { x: -22, z: -30 },
+      { x: 0, z: -40 },
+    ],
+    turrets: [
+      { x: 24, z: 30 },
+      { x: -24, z: 12 },
+      { x: -32, z: -24 },
+      { x: 30, z: -20 },
+      { x: 46, z: -48 },
+      { x: -46, z: -48 },
+    ],
+    chasers: [
+      { x: -44, z: 42 },
+      { x: 46, z: 14 },
+      { x: -6, z: -4 },
+      { x: -40, z: -32 },
+      { x: 34, z: -32 },
+      { x: 2, z: -20 },
+    ],
+  };
+}
+
+// Level 6: a river of lava splits the field, with two dry crossings that
+// turrets watch. Pools dot the ground, and lava burns the hull while you're on it.
+function emberRift(): LevelData {
+  const rocks: RockSpot[] = [];
+  const lava: Patch[] = [];
+  river(lava, 4, 4, [[-32, -20], [18, 30]]);
+  lava.push(
+    { x: -36, z: 34, radius: 5 },
+    { x: 30, z: 32, radius: 4.5 },
+    { x: -14, z: 26, radius: 3.5 },
+    { x: 42, z: -14, radius: 5 },
+    { x: -40, z: -14, radius: 4.5 },
+    { x: 8, z: -18, radius: 4 },
+    { x: -18, z: -44, radius: 4 },
+    { x: 20, z: -44, radius: 3.5 },
+  );
+  wall(rocks, -58, -30, 58, -30, 2.2, [[-46, -36], [0, 10]]);
+  rocks.push(
+    { x: -22, z: 46, size: 2.0 },
+    { x: 14, z: 44, size: 1.8 },
+    { x: -48, z: 22, size: 2.2 },
+    { x: 46, z: 22, size: 2.0 },
+    { x: 12, z: -6, size: 1.6 },
+    { x: -24, z: -10, size: 2.0 },
+    { x: -50, z: -42, size: 1.6 },
+    { x: 40, z: -42, size: 1.8 },
+    { x: -9, z: -48, size: 1.0 },
+    { x: 9, z: -48, size: 1.0 },
+  );
+  return {
+    name: 'Ember Rift',
+    theme: 'ember',
+    start: { x: 0, z: 52 },
+    gate: { x: 0, z: -53 },
+    station: { x: 6, z: 22 },
+    rocks,
+    lava,
+    crystals: [
+      { x: -10, z: 44 },
+      { x: 20, z: 40 },
+      { x: -46, z: 32 },
+      { x: 36, z: 25 },
+      { x: -30, z: 22 },
+      { x: 6, z: 32 },
+      { x: -26, z: 2 },
+      { x: 24, z: 7 },
+      { x: 0, z: 4 }, // in the river: worth a quick dash
+      { x: -16, z: -18 },
+      { x: 34, z: -4 },
+      { x: -48, z: -22 },
+      { x: -41, z: -30 },
+      { x: 5, z: -30 },
+      { x: -30, z: -42 },
+      { x: 30, z: -38 },
+      { x: 0, z: -46 },
+    ],
+    turrets: [
+      { x: -26, z: 16 },
+      { x: 24, z: -6 },
+      { x: -42, z: 42 },
+      { x: 42, z: 40 },
+      { x: -30, z: -20 },
+      { x: 22, z: -20 },
+      { x: 0, z: -40 },
+    ],
+    chasers: [
+      { x: -44, z: 16 },
+      { x: 40, z: 14 },
+      { x: -4, z: -8 },
+      { x: -48, z: -36 },
+      { x: 46, z: -36 },
+      { x: 30, z: -48 },
+      { x: -36, z: -48 },
+    ],
+  };
+}
+
+// Level 7: four lanes of asteroids sliding across the field in alternating
+// directions. Time the gaps; turrets sit between the lanes.
+function driftBelt(): LevelData {
+  const rocks: RockSpot[] = [];
+  const drifters: Drifter[] = [];
+  lane(drifters, 36, 4, 6, [2.2, 1.8, 2.6, 2.0]);
+  lane(drifters, 16, 4, -8, [2.0, 2.6, 1.8, 2.2]);
+  lane(drifters, -6, 5, 7, [1.8, 2.4, 2.0, 2.6, 1.6]);
+  lane(drifters, -28, 5, -9, [2.4, 1.8, 2.2, 2.0, 2.6]);
+  rocks.push(
+    { x: -18, z: 46, size: 1.8 },
+    { x: 20, z: 47, size: 2.2 },
+    { x: 8, z: 26, size: 1.6 },
+    { x: -48, z: 26, size: 2.0 },
+    { x: -24, z: 4, size: 1.6 },
+    { x: 34, z: 6, size: 2.2 },
+    { x: -8, z: -17, size: 2.0 },
+    { x: 22, z: -18, size: 1.8 },
+    { x: -44, z: -40, size: 1.6 },
+    { x: 8, z: -40, size: 2.0 },
+    { x: -9, z: -48, size: 1.0 },
+    { x: 9, z: -48, size: 1.0 },
+  );
+  return {
+    name: 'Drift Belt',
+    theme: 'belt',
+    start: { x: 0, z: 52 },
+    gate: { x: 0, z: -53 },
+    station: { x: -28, z: 26 },
+    rocks,
+    drifters,
+    crystals: [
+      { x: 0, z: 44 },
+      { x: -32, z: 44 },
+      { x: 32, z: 44 },
+      { x: -40, z: 18 },
+      { x: 18, z: 26 },
+      { x: 0, z: 36 },
+      { x: -20, z: 16 },
+      { x: 24, z: 16 },
+      { x: -32, z: 4 },
+      { x: 8, z: 4 },
+      { x: 44, z: -6 },
+      { x: -14, z: -6 },
+      { x: -36, z: -17 },
+      { x: 10, z: -17 },
+      { x: 30, z: -28 },
+      { x: -20, z: -40 },
+      { x: 22, z: -44 },
+    ],
+    turrets: [
+      { x: 30, z: 26 },
+      { x: -44, z: 4 },
+      { x: 20, z: 4 },
+      { x: -22, z: -17 },
+      { x: 40, z: -17 },
+      { x: -30, z: -42 },
+      { x: 34, z: -42 },
+    ],
+    chasers: [
+      { x: -46, z: 46 },
+      { x: 46, z: 26 },
+      { x: -6, z: 26 },
+      { x: 2, z: -17 },
+      { x: -48, z: -17 },
+      { x: 48, z: 4 },
+      { x: 0, z: -46 },
+    ],
+  };
+}
+
+// Level 8: two collapsing stars drag the ship towards their burning cores,
+// with boulders circling them, pools of plasma and the most enemies yet.
+function eventHorizon(): LevelData {
+  const rocks: RockSpot[] = [];
+  wall(rocks, -58, -38, 58, -38, 2.2, [[-6, 6], [30, 40]]);
+  rocks.push(
+    { x: -12, z: 46, size: 1.8 },
+    { x: 14, z: 44, size: 1.6 },
+    { x: 48, z: 16, size: 2.2 },
+    { x: -50, z: -2, size: 1.8 },
+    { x: 10, z: 6, size: 1.6 },
+    { x: -10, z: -24, size: 2.0 },
+    { x: 46, z: -46, size: 1.6 },
+    { x: -9, z: -48, size: 1.0 },
+    { x: 9, z: -48, size: 1.0 },
+  );
+  const orbiters: Orbiter[] = [];
+  for (let i = 0; i < 3; i++) {
+    orbiters.push({ x: -22, z: 22, radius: 9, speed: 0.6, phase: (i * Math.PI * 2) / 3, size: 1.8 });
+    orbiters.push({ x: 24, z: -18, radius: 10, speed: -0.5, phase: (i * Math.PI * 2) / 3 + 1, size: 2.0 });
+  }
+  return {
+    name: 'Event Horizon',
+    theme: 'void',
+    start: { x: 0, z: 52 },
+    gate: { x: 0, z: -53 },
+    station: { x: 22, z: 18 },
+    rocks,
+    orbiters,
+    wells: [
+      { x: -22, z: 22, radius: 18, pull: 14 },
+      { x: 24, z: -18, radius: 18, pull: 14 },
+    ],
+    lava: [
+      { x: 30, z: 36, radius: 5 },
+      { x: -44, z: -10, radius: 5 },
+      { x: 0, z: -2, radius: 4 },
+      { x: -16, z: -30, radius: 4.5 },
+      { x: 44, z: 4, radius: 4 },
+    ],
+    crystals: [
+      { x: -27, z: 22 },
+      { x: -17, z: 20 },
+      { x: -22, z: 9 },
+      { x: 24, z: -12 },
+      { x: 30, z: -20 },
+      { x: 18, z: -22 },
+      { x: 0, z: 42 },
+      { x: 22, z: 40 },
+      { x: -36, z: 42 },
+      { x: 40, z: 28 },
+      { x: -46, z: 20 },
+      { x: 6, z: 22 },
+      { x: 44, z: -14 },
+      { x: -30, z: -6 },
+      { x: 0, z: -14 },
+      { x: -30, z: -20 },
+      { x: 35, z: -38 },
+      { x: -46, z: -44 },
+      { x: 0, z: -44 },
+    ],
+    turrets: [
+      { x: 0, z: 30 },
+      { x: 42, z: 42 },
+      { x: -46, z: 40 },
+      { x: -4, z: 12 },
+      { x: 46, z: -28 },
+      { x: -40, z: -28 },
+      { x: 4, z: -30 },
+      { x: 26, z: -48 },
+    ],
+    chasers: [
+      { x: -40, z: 50 },
+      { x: 40, z: 22 },
+      { x: -46, z: 8 },
+      { x: 12, z: -6 },
+      { x: 44, z: -4 },
+      { x: -24, z: -16 },
+      { x: 8, z: -46 },
+      { x: -46, z: -50 },
+      { x: 30, z: 4 },
+    ],
+  };
+}
+
+export const LEVELS: LevelData[] = [driftField(), crossfire(), switchyard(), hive(), frostbite(), emberRift(), driftBelt(), eventHorizon()];

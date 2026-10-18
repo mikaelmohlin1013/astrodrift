@@ -98,6 +98,14 @@ export class Enemies {
     return this.turrets.length + this.chasers.length;
   }
 
+  /** Where the enemies still standing are, for the radar. */
+  positions(): { at: THREE.Vector3; turret: boolean }[] {
+    return [
+      ...this.turrets.filter((t) => t.hp > 0).map((t) => ({ at: t.group.position, turret: true })),
+      ...this.chasers.filter((c) => c.hp > 0).map((c) => ({ at: c.group.position, turret: false })),
+    ];
+  }
+
   /** Footprints of the turrets still standing, so the ship bumps into them. */
   obstacles(): Rock[] {
     return this.turrets.filter((t) => t.hp > 0).map((t) => t.rock);
