@@ -35,6 +35,7 @@ export class Player {
   private emitTimer = 0;
   private guns: THREE.Vector3[] = [];
   private nextGun = 0;
+  private shield: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
 
   constructor() {
     const trim = new THREE.MeshStandardMaterial({ color: 0x1d2a44, metalness: 0.6, roughness: 0.4, flatShading: true });
@@ -97,6 +98,39 @@ export class Player {
       if (o instanceof THREE.Mesh && o.material !== flameMat) o.castShadow = true;
     });
     this.mesh.add(new THREE.PointLight(0xffa040, 4, 6).translateZ(1.6));
+
+    // Shield bubble: a squashed sphere that glows at its edges, so it reads as
+    // a bubble rather than a solid ball.
+    this.shield = new THREE.Mesh(
+      new THREE.SphereGeometry(1.7, 24, 16),
+      new THREE.ShaderMaterial({
+        uniforms: { color: { value: new THREE.Color(0x8a9dff) }, strength: { value: 0 } },
+        vertexShader: `
+          varying vec3 vNormal;
+          varying vec3 vView;
+          void main() {
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            vNormal = normalize(normalMatrix * normal);
+            vView = normalize(-mv.xyz);
+            gl_Position = projectionMatrix * mv;
+          }`,
+        fragmentShader: `
+          uniform vec3 color;
+          uniform float strength;
+          varying vec3 vNormal;
+          varying vec3 vView;
+          void main() {
+            float rim = pow(1.0 - abs(dot(vNormal, vView)), 2.5);
+            gl_FragColor = vec4(color * (rim + 0.04) * strength, 1.0);
+          }`,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    this.shield.scale.set(1, 0.55, 1.15);
+    this.shield.visible = false;
+    this.mesh.add(this.shield);
   }
 
   /** How fast the ship is going, 0..1 of boosted top speed. */
@@ -115,6 +149,11 @@ export class Player {
   /** Unit vector the nose points along. */
   get forward(): THREE.Vector3 {
     return new THREE.Vector3(-Math.sin(this.heading), 0, -Math.cos(this.heading));
+  }
+
+  /** Yaw in radians, 0 = facing north (-z). */
+  get yaw(): number {
+    return this.heading;
   }
 
   /** World position of the next cannon to fire, alternating left and right. */
@@ -188,6 +227,15 @@ export class Player {
   /** Flashes the hull red for a moment after a hit (0..1 strength). */
   setDamageFlash(amount: number): void {
     this.hullMat.emissive.setRGB(amount, 0, 0);
+  }
+
+  /**
+   * Shows the shield bubble: `charge` is how full it is (0..1) and `flash`
+   * brightens it for a moment when it absorbs a hit.
+   */
+  setShield(charge: number, flash: number): void {
+    this.shield.visible = charge > 0 || flash > 0;
+    this.shield.material.uniforms.strength.value = charge * (0.5 + Math.sin(this.time * 5) * 0.08) + flash * 2.5;
   }
 
   reset(start: Spot): void {

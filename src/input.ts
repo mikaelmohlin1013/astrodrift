@@ -24,6 +24,10 @@ export class Input {
     return this.keys.has('Space');
   }
 
+  get missile(): boolean {
+    return this.keys.has('KeyE') || this.keys.has('KeyF');
+  }
+
   get boost(): boolean {
     return this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
   }

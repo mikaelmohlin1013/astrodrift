@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Then open http://localhost:5173 and press Enter on the title screen. The controls are relative to the ship: W or Up thrusts forward, A/D or Left/Right turn, S or Down brakes and then reverses, Shift boosts while thrusting, and Space fires the lasers. Press M to turn sound on or off.
+Then open http://localhost:5173 and press Enter on the title screen. The controls are relative to the ship: W or Up thrusts forward, A/D or Left/Right turn, S or Down brakes and then reverses, Shift boosts while thrusting, Space fires the lasers and E (or F) launches a homing missile once you have bought the launcher. Press M to turn sound on or off, and U on the title or level-clear screen to open the upgrade shop.
 
 There are four hand-built levels, each running from a landing pad in the south to a gate in the north. Pick up every crystal to open the gate, then fly through it to reach the next level. Each crystal patches the hull a little. Hitting rocks fast damages the hull, and so do enemies, and when it runs out you retry the level. The arrow on the ground points to the nearest crystal, and to the gate once it is open.
 
@@ -24,11 +24,34 @@ There are two kinds of enemy. Turrets stay put, turn to track the ship and fire 
 
 Levels you have reached are unlocked on the title screen (press 1 to 4 to pick one), and the best time for each level is saved in the browser.
 
+## Repair stations and upgrades
+
+Every level has a green repair station partway along. Settle slowly onto its pad to dock: the hull is repaired, the shield charged, missiles restocked, and the crystals you have picked up so far are banked. Then the upgrade shop opens, and the game waits until you undock with Esc.
+
+Each crystal is worth 10 to spend, and destroying a turret earns 15 and a chaser 8. Earnings are banked when you dock or fly through the gate; if the hull breaks first, whatever wasn't banked is lost. Banked crystals and upgrades are saved in the browser and carry across levels and sessions.
+
+| Upgrade | Levels | What it does |
+| --- | --- | --- |
+| Laser power | 3 | Bolt damage from 1× up to 2.75× |
+| Rapid fire | 3 | From 6.3 up to 11.8 shots a second |
+| Spread shot | 2 | Every shot fans out into 3, then 5 bolts |
+| Homing missiles | 4 | A launcher with 4, rising to 10 missiles per load; each one seeks the nearest enemy it can see and destroys a turret in one hit |
+| Shield | 4 | A bubble of 30 up to 100 that takes damage before the hull and recharges after a few seconds without a hit |
+| Shield recharge | 3 | The shield starts refilling sooner and refills faster |
+| Hull plating | 3 | Hull from 100 up to 180 |
+| Crystal magnet | 2 | Crystals within 6, then 10 metres fly to the ship |
+
+When the hull drops below 60%, a green arrow next to the ship points to the station.
+
 ## Layout
 
 - `src/main.ts` sets up the renderer and game loop
 - `src/level.ts` has the hand-built levels: rocks, crystal spots, enemy spots, start and gate
 - `src/world.ts` builds the ground texture, lights, border and stars, builds each level's rocks, and handles rock collisions
+- `src/station.ts` is the repair station pad that docks the ship
+- `src/upgrades.ts` has the upgrade list and prices, the saved progress, and the ship stats each upgrade level gives
+- `src/shop.ts` is the upgrade shop panel
+- `src/missiles.ts` has the homing missiles
 - `src/gate.ts` is the exit gate that opens once every crystal is collected
 - `src/enemies.ts` has the turrets and chasers
 - `src/weapons.ts` is the laser bolt pool used by both the ship and the turrets

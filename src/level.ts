@@ -1,6 +1,6 @@
 // The hand-built levels. North is -z (up the screen). Every level starts at
 // the south edge and ends at a gate in the north; the gate only opens once
-// every crystal has been picked up. Later levels have more enemies:
+// every crystal has been picked up. Each has a repair station partway along. Later levels have more enemies:
 // turrets that sit still and shoot, and chasers that wake up and ram you.
 
 export interface RockSpot {
@@ -18,6 +18,8 @@ export interface LevelData {
   name: string;
   start: Spot;
   gate: Spot;
+  /** The repair station pad, somewhere safe partway through. */
+  station: Spot;
   rocks: RockSpot[];
   crystals: Spot[];
   turrets: Spot[];
@@ -94,6 +96,7 @@ function driftField(): LevelData {
     name: 'Drift Field',
     start: { x: 0, z: 50 },
     gate: { x: 0, z: -52 },
+    station: { x: -22, z: 10 },
     rocks,
     crystals: [
       { x: -6, z: 40 },
@@ -144,6 +147,7 @@ function crossfire(): LevelData {
     name: 'Crossfire',
     start: { x: 0, z: 52 },
     gate: { x: 0, z: -52 },
+    station: { x: -4, z: 4 },
     rocks,
     crystals: [
       { x: 0, z: 42 },
@@ -203,6 +207,7 @@ function switchyard(): LevelData {
     name: 'Switchyard',
     start: { x: 0, z: 52 },
     gate: { x: 0, z: -53 },
+    station: { x: 12, z: 1 },
     rocks,
     crystals: [
       { x: -20, z: 44 },
@@ -262,6 +267,7 @@ function hive(): LevelData {
     name: 'The Hive',
     start: { x: 0, z: 52 },
     gate: { x: 0, z: -53 },
+    station: { x: -8, z: -10 },
     rocks,
     crystals: [
       // Inside the rings

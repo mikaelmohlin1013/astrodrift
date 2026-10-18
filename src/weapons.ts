@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { WORLD_SIZE, type Rock } from './world';
 import { halo } from './fx';
 
-const MAX = 60;
+const MAX = 120; // enough for five-bolt spread shots at the fastest fire rate
 const FORWARD = new THREE.Vector3(0, 0, -1);
 
 interface Bolt {

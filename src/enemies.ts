@@ -19,6 +19,10 @@ const CHASER_WAKE = 17;
 const CHASER_SPEED = 8.5; // the ship's top speed is 11, so you can outrun one
 const CHASER_ACCEL = 2.2;
 
+/** Crystals earned for destroying each kind of enemy. */
+export const TURRET_REWARD = 15;
+export const CHASER_REWARD = 8;
+
 const RED = new THREE.Color(0xff3b4e);
 const WHITE = new THREE.Color(0xffffff);
 
@@ -43,6 +47,12 @@ interface Chaser {
   hp: number;
   flash: number;
   phase: number;
+}
+
+/** Something that can hit enemies, and how hard each hit lands. */
+export interface DamageSource {
+  shots: { hit(x: number, z: number, radius: number): number };
+  damage: number;
 }
 
 /** What happened to the enemies this frame, for sounds and effects. */
@@ -162,30 +172,60 @@ export class Enemies {
   }
 
   /**
-   * Checks the player's bolts against every enemy. Returns where bolts hit
-   * and where enemies were destroyed.
+   * Checks the player's shots against every enemy. Returns where shots hit,
+   * where enemies were destroyed, and the crystals earned for them.
    */
-  takeHits(bolts: Bolts): { hits: THREE.Vector3[]; kills: THREE.Vector3[] } {
+  takeHits(sources: DamageSource[]): { hits: THREE.Vector3[]; kills: THREE.Vector3[]; reward: number } {
     const hits: THREE.Vector3[] = [];
     const kills: THREE.Vector3[] = [];
+    let reward = 0;
     for (const e of [...this.turrets, ...this.chasers]) {
       if (e.hp <= 0) continue;
       const p = e.group.position;
-      const radius = 'rock' in e ? TURRET_RADIUS : CHASER_RADIUS + 0.2;
-      const n = bolts.hit(p.x, p.z, radius);
-      if (n === 0) continue;
-      e.hp -= n;
+      const turret = 'rock' in e;
+      const radius = turret ? TURRET_RADIUS : CHASER_RADIUS + 0.2;
+      let damage = 0;
+      for (const s of sources) damage += s.shots.hit(p.x, p.z, radius) * s.damage;
+      if (damage === 0) continue;
+      e.hp -= damage;
       e.flash = 1;
       if ('awake' in e) e.awake = true;
       const at = new THREE.Vector3(p.x, 1.2, p.z);
       if (e.hp <= 0) {
         e.group.visible = false;
         kills.push(at);
+        reward += turret ? TURRET_REWARD : CHASER_REWARD;
       } else {
         hits.push(at);
       }
     }
-    return { hits, kills };
+    return { hits, kills, reward };
+  }
+
+  /**
+   * The enemy a missile at `from` heading along `dir` should chase: the
+   * closest one within `range` that no rock hides, counting enemies behind
+   * it as further away.
+   */
+  nearestTarget(from: THREE.Vector3, dir: THREE.Vector3, range: number, rocks: Rock[]): THREE.Object3D | null {
+    let best: THREE.Object3D | null = null;
+    let bestScore = Infinity;
+    for (const e of [...this.turrets, ...this.chasers]) {
+      if (e.hp <= 0) continue;
+      const p = e.group.position;
+      const dx = p.x - from.x;
+      const dz = p.z - from.z;
+      const d = Math.hypot(dx, dz);
+      if (d > range) continue;
+      const ahead = d > 0 ? (dx * dir.x + dz * dir.z) / d : 1;
+      if (ahead < -0.3) continue;
+      const score = d * (2 - ahead);
+      if (score < bestScore && clearLine(from, p, rocks)) {
+        bestScore = score;
+        best = e.group;
+      }
+    }
+    return best;
   }
 
   /** Pushes `desired` away from a point once it is closer than `range`. */

@@ -67,8 +67,11 @@ export class Crystals {
     return this.items.filter((c) => !c.taken).length;
   }
 
-  /** Spins and bobs the crystals, and returns where the player picked any up. */
-  update(dt: number, player: THREE.Vector3 | null): THREE.Vector3[] {
+  /**
+   * Spins and bobs the crystals, and returns where the player picked any up.
+   * Crystals within `magnet` of the player drift towards it.
+   */
+  update(dt: number, player: THREE.Vector3 | null, magnet = 0): THREE.Vector3[] {
     this.time += dt;
     const picked: THREE.Vector3[] = [];
     const reach = RADIUS + PLAYER_RADIUS;
@@ -77,6 +80,13 @@ export class Crystals {
       c.gem.rotation.y += dt * 1.5;
       c.gem.position.y = 1.3 + Math.sin(this.time * 2 + c.phase) * 0.25;
       const p = c.group.position;
+      const dist = player ? Math.hypot(p.x - player.x, p.z - player.z) : Infinity;
+      if (player && dist < magnet) {
+        // Faster the closer it gets, so it snaps in at the end.
+        const step = Math.min(dist, (6 + (magnet - dist) * 3) * dt);
+        p.x += ((player.x - p.x) / dist) * step;
+        p.z += ((player.z - p.z) / dist) * step;
+      }
       if (player && Math.hypot(p.x - player.x, p.z - player.z) < reach) {
         c.taken = true;
         c.group.visible = false;
