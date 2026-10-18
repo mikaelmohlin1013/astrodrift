@@ -103,7 +103,7 @@ export function buildGripen(): GripenModel {
       true,
     );
     // Canards on the intake shoulders.
-    add(plate([[0.8, 4.0], [2.5, 6.6], [2.5, 6.95], [0.8, 7.05]].map(([x, d]) => [x * s, d]), 0.08, 0.36), paint, true);
+    add(plate([[0.8, 4.0], [2.5, 6.2], [2.5, 6.55], [0.8, 7.55]].map(([x, d]) => [x * s, d]), 0.08, 0.36), paint, true);
     // An IRIS-T on each wingtip rail.
     const missile = add(new THREE.CylinderGeometry(0.08, 0.08, 3.3, 10).rotateX(Math.PI / 2), missileMat);
     missile.position.set(s * 4.4, -0.05, z(10.3));
@@ -278,7 +278,7 @@ function paintTexture(): THREE.Texture {
     // Leading-edge flaps.
     line([[1.3 * s, 7.05], [4.1 * s, 10.05]]);
     // Canard hinge line.
-    line([[0.9 * s, 6.0], [2.45 * s, 6.55]]);
+    line([[0.9 * s, 6.25], [2.45 * s, 6.2]]);
     // Fuselage panels and the intake lip.
     line([[0.4 * s, 2.0], [0.4 * s, 13.5]]);
     line([[0.8 * s, 4.2], [0.86 * s, 6.5]]);
