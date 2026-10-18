@@ -50,10 +50,10 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-// A soft studio light for reflections, so metal looks like metal.
+// A soft studio light for reflections until the level's HDR sky has loaded.
 scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.35;
-const { sun } = createWorld(scene);
+const { sun } = createWorld(scene, renderer);
 const sunOffset = sun.position.clone();
 
 const input = new Input();
