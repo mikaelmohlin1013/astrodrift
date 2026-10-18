@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Input } from './input';
-import { WORLD_SIZE, type Rock } from './world';
-import { LEVEL } from './level';
+import { WORLD_SIZE, resolveRocks, type Rock } from './world';
+import type { Spot } from './level';
 import { halo, type Particles } from './fx';
 
 const SPEED = 11;
@@ -33,6 +33,8 @@ export class Player {
   private heading = 0; // yaw in radians, 0 = facing north (-z)
   private turnRate = 0;
   private emitTimer = 0;
+  private guns: THREE.Vector3[] = [];
+  private nextGun = 0;
 
   constructor() {
     const trim = new THREE.MeshStandardMaterial({ color: 0x1d2a44, metalness: 0.6, roughness: 0.4, flatShading: true });
@@ -66,6 +68,15 @@ export class Player {
 
     this.mesh.add(body, ...wings, fin, cockpit);
 
+    // A small laser cannon under each wing; shots alternate between them.
+    const gunGeo = new THREE.CylinderGeometry(0.07, 0.09, 0.9, 6).rotateX(Math.PI / 2);
+    for (const side of [-1, 1]) {
+      const gun = new THREE.Mesh(gunGeo, trim);
+      gun.position.set(side * 0.8, -0.05, 0.1);
+      this.mesh.add(gun);
+      this.guns.push(new THREE.Vector3(side * 0.8, -0.05, -0.4));
+    }
+
     // Two engines with flames that stretch with speed.
     const engineGeo = new THREE.CylinderGeometry(0.2, 0.26, 0.6, 8).rotateX(Math.PI / 2);
     const flameGeo = new THREE.ConeGeometry(0.17, 1, 8).rotateX(Math.PI / 2).translate(0, 0, 0.5);
@@ -86,7 +97,6 @@ export class Player {
       if (o instanceof THREE.Mesh && o.material !== flameMat) o.castShadow = true;
     });
     this.mesh.add(new THREE.PointLight(0xffa040, 4, 6).translateZ(1.6));
-    this.mesh.position.set(LEVEL.start.x, 1, LEVEL.start.z);
   }
 
   /** How fast the ship is going, 0..1 of boosted top speed. */
@@ -102,6 +112,18 @@ export class Player {
     return this.boosting;
   }
 
+  /** Unit vector the nose points along. */
+  get forward(): THREE.Vector3 {
+    return new THREE.Vector3(-Math.sin(this.heading), 0, -Math.cos(this.heading));
+  }
+
+  /** World position of the next cannon to fire, alternating left and right. */
+  nextMuzzle(): THREE.Vector3 {
+    const gun = this.guns[this.nextGun];
+    this.nextGun = (this.nextGun + 1) % this.guns.length;
+    return gun.clone().applyMatrix4(this.mesh.matrixWorld);
+  }
+
   update(dt: number, input: Input): void {
     this.time += dt;
     const { turn, thrust } = input;
@@ -111,7 +133,7 @@ export class Player {
     // Rotate with left/right; the turn rate eases in and out so it feels weighty.
     this.turnRate = THREE.MathUtils.lerp(this.turnRate, -turn * TURN_SPEED, 1 - Math.exp(-TURN * dt));
     this.heading += this.turnRate * dt;
-    const forward = new THREE.Vector3(-Math.sin(this.heading), 0, -Math.cos(this.heading));
+    const forward = this.forward;
 
     // Thrust pushes along the nose; down brakes and then backs up slowly.
     const max = SPEED * (this.boosting ? BOOST : 1);
@@ -146,28 +168,7 @@ export class Player {
    * Returns the speed it hit with (0 when nothing was hit).
    */
   collide(rocks: Rock[]): number {
-    const p = this.mesh.position;
-    let impact = 0;
-    for (const rock of rocks) {
-      const dx = p.x - rock.x;
-      const dz = p.z - rock.z;
-      const min = rock.radius + PLAYER_RADIUS;
-      const distSq = dx * dx + dz * dz;
-      if (distSq >= min * min) continue;
-      const dist = Math.sqrt(distSq) || 0.001;
-      const nx = dx / dist;
-      const nz = dz / dist;
-      p.x = rock.x + nx * min;
-      p.z = rock.z + nz * min;
-      // Reflect the part of the velocity heading into the rock.
-      const into = this.velocity.x * nx + this.velocity.z * nz;
-      if (into < 0) {
-        impact = Math.max(impact, -into);
-        this.velocity.x -= (1 + BOUNCE) * into * nx;
-        this.velocity.z -= (1 + BOUNCE) * into * nz;
-      }
-    }
-    return impact;
+    return resolveRocks(this.mesh.position, this.velocity, PLAYER_RADIUS, rocks, BOUNCE);
   }
 
   /** Leaves a trail of exhaust sparks behind the engines while thrusting. */
@@ -189,8 +190,8 @@ export class Player {
     this.hullMat.emissive.setRGB(amount, 0, 0);
   }
 
-  reset(): void {
-    this.mesh.position.set(LEVEL.start.x, 1, LEVEL.start.z);
+  reset(start: Spot): void {
+    this.mesh.position.set(start.x, 1, start.z);
     this.mesh.quaternion.identity();
     this.heading = 0;
     this.turnRate = 0;

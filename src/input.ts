@@ -20,6 +20,10 @@ export class Input {
     return (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
   }
 
+  get fire(): boolean {
+    return this.keys.has('Space');
+  }
+
   get boost(): boolean {
     return this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
   }

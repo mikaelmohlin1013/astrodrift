@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LEVEL } from './level';
+import type { LevelData } from './level';
 
 export const WORLD_SIZE = 120;
 
@@ -10,10 +10,10 @@ export interface Rock {
   radius: number;
 }
 
-// Builds the static scene: lights, ground, the level's rocks, the field
-// border and a starfield. Returns the sun so it can follow the player and
-// keep shadows nearby, and the rock footprints for collisions.
-export function createWorld(scene: THREE.Scene): { sun: THREE.DirectionalLight; rocks: Rock[] } {
+// Builds the parts of the scene every level shares: lights, ground, the
+// field border and a starfield. Returns the sun so it can follow the player
+// and keep shadows nearby.
+export function createWorld(scene: THREE.Scene): { sun: THREE.DirectionalLight } {
   scene.background = new THREE.Color(0x05070d);
   scene.fog = new THREE.Fog(0x05070d, 45, 115);
 
@@ -39,26 +39,68 @@ export function createWorld(scene: THREE.Scene): { sun: THREE.DirectionalLight; 
   ground.receiveShadow = true;
   scene.add(ground);
 
-  scene.add(startPad());
   scene.add(border());
+  scene.add(starfield());
+  return { sun };
+}
 
-  const rand = mulberry32(7);
-  const palette = [0x6b5a52, 0x5c5466, 0x75604c, 0x4f4a55].map((c) => new THREE.Color(c));
-  const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true });
+const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true });
+const palette = [0x6b5a52, 0x5c5466, 0x75604c, 0x4f4a55].map((c) => new THREE.Color(c));
+
+// Builds one level's rocks and landing pad into a group, so the whole level
+// can be swapped out later. Returns the rock footprints for collisions.
+export function buildLevel(level: LevelData, seed: number): { group: THREE.Group; rocks: Rock[] } {
+  const group = new THREE.Group();
+  group.add(startPad(level));
+  const rand = mulberry32(seed);
   const rocks: Rock[] = [];
-  for (const spot of LEVEL.rocks) {
+  for (const spot of level.rocks) {
     const r = spot.size;
     const rock = new THREE.Mesh(rockGeometry(r, rand, palette[Math.floor(rand() * palette.length)]), rockMat);
     rock.position.set(spot.x, r * 0.45, spot.z);
     rock.rotation.set(rand() * 0.6, rand() * Math.PI * 2, rand() * 0.6);
     rock.scale.y = 0.7 + rand() * 0.4;
     rock.castShadow = rock.receiveShadow = true;
-    scene.add(rock);
+    group.add(rock);
     rocks.push({ x: spot.x, z: spot.z, radius: r * 0.9 });
   }
+  return { group, rocks };
+}
 
-  scene.add(starfield());
-  return { sun, rocks };
+/** Frees the GPU buffers of a level group built by `buildLevel`. */
+export function disposeLevel(group: THREE.Group): void {
+  group.traverse((o) => {
+    if (o instanceof THREE.Mesh) o.geometry.dispose();
+  });
+  group.removeFromParent();
+}
+
+/**
+ * Pushes a circle at `p` out of any rock it overlaps and bounces its velocity
+ * off. Returns the speed it hit with (0 when nothing was hit).
+ */
+export function resolveRocks(p: THREE.Vector3, velocity: THREE.Vector3, radius: number, rocks: Rock[], bounce: number): number {
+  let impact = 0;
+  for (const rock of rocks) {
+    const dx = p.x - rock.x;
+    const dz = p.z - rock.z;
+    const min = rock.radius + radius;
+    const distSq = dx * dx + dz * dz;
+    if (distSq >= min * min) continue;
+    const dist = Math.sqrt(distSq) || 0.001;
+    const nx = dx / dist;
+    const nz = dz / dist;
+    p.x = rock.x + nx * min;
+    p.z = rock.z + nz * min;
+    // Reflect the part of the velocity heading into the rock.
+    const into = velocity.x * nx + velocity.z * nz;
+    if (into < 0) {
+      impact = Math.max(impact, -into);
+      velocity.x -= (1 + bounce) * into * nx;
+      velocity.z -= (1 + bounce) * into * nz;
+    }
+  }
+  return impact;
 }
 
 // A lumpy boulder: an icosphere with each corner pushed in or out, and a
@@ -120,12 +162,12 @@ function groundCanvas(rand: () => number): HTMLCanvasElement {
 }
 
 // Glowing landing ring where each run starts.
-function startPad(): THREE.Object3D {
+function startPad(level: LevelData): THREE.Object3D {
   const pad = new THREE.Mesh(
     new THREE.RingGeometry(2.6, 3.1, 48).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({ color: 0x4fc3ff, transparent: true, opacity: 0.6 }),
   );
-  pad.position.set(LEVEL.start.x, 0.03, LEVEL.start.z);
+  pad.position.set(level.start.x, 0.03, level.start.z);
   return pad;
 }
 

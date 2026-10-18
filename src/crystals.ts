@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LEVEL } from './level';
+import type { Spot } from './level';
 import { PLAYER_RADIUS } from './player';
 import { halo } from './fx';
 
@@ -13,29 +13,36 @@ interface Crystal {
   taken: boolean;
 }
 
+const geo = new THREE.OctahedronGeometry(RADIUS, 0).scale(1, 1.6, 1);
+const mat = new THREE.MeshStandardMaterial({
+  color: COLOR,
+  emissive: 0x2bd9a8,
+  emissiveIntensity: 1.3,
+  metalness: 0.1,
+  roughness: 0.15,
+  flatShading: true,
+});
+const shardGeo = new THREE.OctahedronGeometry(0.28, 0).scale(1, 1.8, 1);
+const ringMat = new THREE.MeshBasicMaterial({ color: COLOR, transparent: true, opacity: 0.35 });
+const ringGeo = new THREE.RingGeometry(0.9, 1.1, 32).rotateX(-Math.PI / 2);
+
 // The level's crystals, at fixed spots along the route. Each one can be
 // picked up once per run.
 export class Crystals {
-  readonly total = LEVEL.crystals.length;
   private items: Crystal[] = [];
   private time = 0;
 
-  constructor(scene: THREE.Scene) {
-    const geo = new THREE.OctahedronGeometry(RADIUS, 0);
-    geo.scale(1, 1.6, 1);
-    const mat = new THREE.MeshStandardMaterial({
-      color: COLOR,
-      emissive: 0x2bd9a8,
-      emissiveIntensity: 1.3,
-      metalness: 0.1,
-      roughness: 0.15,
-      flatShading: true,
-    });
-    const shardGeo = new THREE.OctahedronGeometry(0.28, 0).scale(1, 1.8, 1);
-    const ringMat = new THREE.MeshBasicMaterial({ color: COLOR, transparent: true, opacity: 0.35 });
-    const ringGeo = new THREE.RingGeometry(0.9, 1.1, 32).rotateX(-Math.PI / 2);
+  constructor(private scene: THREE.Scene) {}
 
-    for (const spot of LEVEL.crystals) {
+  get total(): number {
+    return this.items.length;
+  }
+
+  /** Replaces the crystals with a new level's set. */
+  load(spots: Spot[]): void {
+    for (const c of this.items) c.group.removeFromParent();
+    this.items = [];
+    for (const spot of spots) {
       const group = new THREE.Group();
       group.position.set(spot.x, 0, spot.z);
       const gem = new THREE.Mesh(geo, mat);
@@ -51,7 +58,7 @@ export class Crystals {
       const ring = new THREE.Mesh(ringGeo, ringMat);
       ring.position.y = 0.04;
       group.add(gem, ring);
-      scene.add(group);
+      this.scene.add(group);
       this.items.push({ group, gem, phase: Math.random() * Math.PI * 2, taken: false });
     }
   }

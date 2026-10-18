@@ -15,7 +15,9 @@
       #hull-fill { height: 100%; width: 100%; transition: width 0.15s; }
       .label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7; }
       #score { font-size: 28px; font-weight: 600; color: #6affd8; }
-      #score small { font-size: 16px; opacity: 0.6; }
+      #score small, #kills small { font-size: 16px; opacity: 0.6; }
+      #kills { font-size: 22px; font-weight: 600; color: #ff7a86; }
+      #level-name { font-weight: 600; letter-spacing: 0.04em; margin-bottom: 4px; }
       #timer { right: 16px; top: 16px; text-align: right; display: grid; gap: 4px; }
       #time { font-size: 24px; font-variant-numeric: tabular-nums; font-weight: 600; }
       #sound { right: 16px; bottom: 16px; opacity: 0.6; }
@@ -49,15 +51,20 @@
         border-bottom-width: 2px; border-radius: 4px; font: 12px/1.5 ui-monospace, monospace; text-align: center;
       }
       #title .prompt { font-size: 20px; color: #6affd8; }
+      #title-levels { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 20px; margin-top: 14px; }
+      #title-levels .locked { opacity: 0.3; }
     </style>
   </head>
   <body>
     <div id="hit-flash" class="overlay"></div>
     <div id="stats" class="overlay hidden">
+      <span id="level-name"></span>
       <span class="label">Hull</span>
       <div id="hull"><div id="hull-fill"></div></div>
       <span class="label">Crystals</span>
       <span id="score">0</span>
+      <span class="label">Enemies destroyed</span>
+      <span id="kills">0</span>
     </div>
     <div id="timer" class="overlay hidden">
       <span class="label">Time</span>
@@ -65,34 +72,36 @@
       <span class="label">Best <span id="best">--</span></span>
     </div>
     <div id="toast" class="overlay"></div>
-    <div id="help" class="overlay hidden">W / ↑ thrust · A D / ← → turn · S / ↓ brake · Shift boost · Collect every crystal, then fly through the gate</div>
+    <div id="help" class="overlay hidden">W / ↑ thrust · A D / ← → turn · S / ↓ brake · Shift boost · Space fire · Collect every crystal, then fly through the gate</div>
     <div id="sound" class="overlay"><kbd>M</kbd> sound <span id="sound-state">on</span></div>
 
     <div id="title" class="overlay panel">
       <h1>ASTRODRIFT</h1>
-      <div class="tagline">Pick up every crystal in the field, then fly through the gate at the far end. Mind the rocks.</div>
+      <div class="tagline">Pick up every crystal in the field, then fly through the gate at the far end. Mind the rocks, and shoot the turrets and chasers before they get you.</div>
       <div class="keys">
         <span><kbd>W</kbd> or <kbd>↑</kbd></span><span>thrust forward</span>
         <span><kbd>A</kbd> <kbd>D</kbd> or <kbd>←</kbd> <kbd>→</kbd></span><span>turn the ship</span>
         <span><kbd>S</kbd> or <kbd>↓</kbd></span><span>brake and reverse</span>
         <span><kbd>Shift</kbd></span><span>boost while thrusting</span>
+        <span><kbd>Space</kbd></span><span>fire lasers</span>
         <span><kbd>M</kbd></span><span>sound on / off</span>
       </div>
+      <div id="title-levels"></div>
       <div id="title-best" class="label"></div>
-      <div class="prompt">Press Enter to launch</div>
+      <div id="title-prompt" class="prompt">Press Enter to launch</div>
     </div>
 
     <div id="game-over" class="overlay panel hidden">
       <h1>Hull destroyed</h1>
       <div id="final-score" class="result"></div>
-      <div class="prompt">Press Enter to fly again</div>
+      <div id="over-prompt" class="prompt">Press Enter to fly again</div>
     </div>
 
     <div id="level-clear" class="overlay panel hidden">
-      <h1>Level clear</h1>
+      <h1 id="clear-title">Level clear</h1>
       <div id="clear-time" class="result"></div>
       <div id="clear-detail"></div>
-      <div class="prompt">Press Enter to fly again</div>
+      <div id="clear-prompt" class="prompt">Press Enter to fly again</div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>
