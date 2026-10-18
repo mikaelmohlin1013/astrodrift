@@ -18,7 +18,7 @@ const TEX_L = 16;
 const PX = 128; // pixels per metre
 
 const GREY = '#8c939a';
-const GREY_DARK = '#71787f';
+const GREY_DARK = '#80878e';
 const BLUE = '#006aa7';
 const YELLOW = '#fecc02';
 
@@ -66,18 +66,17 @@ export function buildGripen(): GripenModel {
   add(
     loft([
       [0.0, 0.02, 0.02, 0.02, 0.0],
-      [0.6, 0.2, 0.19, 0.19, 0.0],
-      [1.5, 0.36, 0.32, 0.32, 0.02],
-      [2.6, 0.5, 0.44, 0.44, 0.05],
-      [3.6, 0.56, 0.52, 0.48, 0.08],
-      [4.5, 0.72, 0.56, 0.54, 0.08],
-      [5.3, 1.0, 0.58, 0.58, 0.04],
-      [6.6, 1.08, 0.62, 0.6, 0.04],
-      [8.6, 1.0, 0.62, 0.58, 0.04],
-      [10.6, 0.86, 0.6, 0.55, 0.05],
-      [12.3, 0.68, 0.54, 0.5, 0.05],
-      [13.6, 0.52, 0.47, 0.46, 0.05],
-      [14.0, 0.48, 0.45, 0.45, 0.05],
+      [0.8, 0.2, 0.18, 0.18, 0.0],
+      [2.0, 0.36, 0.33, 0.32, 0.03],
+      [3.2, 0.45, 0.46, 0.42, 0.06],
+      [4.4, 0.54, 0.52, 0.48, 0.08],
+      [5.4, 0.7, 0.55, 0.52, 0.05],
+      [6.8, 0.74, 0.58, 0.55, 0.05],
+      [9.0, 0.7, 0.58, 0.55, 0.05],
+      [11.0, 0.62, 0.55, 0.52, 0.05],
+      [12.6, 0.54, 0.5, 0.48, 0.05],
+      [13.6, 0.48, 0.46, 0.45, 0.05],
+      [14.0, 0.46, 0.44, 0.44, 0.05],
     ]),
     paint,
     true,
@@ -85,28 +84,29 @@ export function buildGripen(): GripenModel {
 
   // Intake mouths, just behind the cockpit on each side.
   for (const s of [-1, 1]) {
-    const mouth = add(new THREE.CircleGeometry(0.3, 16).rotateY(Math.PI), dark);
-    mouth.scale.set(0.9, 1.4, 1);
-    mouth.position.set(s * 0.8, -0.02, z(4.85));
+    const mouth = add(new THREE.CircleGeometry(0.22, 16).rotateY(Math.PI), dark);
+    mouth.scale.set(0.9, 1.5, 1);
+    mouth.position.set(s * 0.6, -0.02, z(5.0));
   }
 
-  // Delta wings with clipped tips, low on the fuselage.
+  // Delta wings, low on the fuselage: a 45-degree leading edge, a long
+    // clipped tip and a straight trailing edge square to the fuselage.
   for (const s of [-1, 1]) {
     add(
-      plate([[0.6, 6.0], [4.1, 10.1], [4.1, 11.7], [0.6, 13.1]].map(([x, d]) => [x * s, d]), 0.14, -0.02),
+      plate([[0.6, 6.4], [4.1, 9.0], [4.1, 11.7], [0.6, 11.9]].map(([x, d]) => [x * s, d]), 0.14, -0.02),
       paint,
       true,
     );
     // Canards on the intake shoulders.
-    add(plate([[0.8, 4.4], [2.45, 6.0], [2.45, 6.45], [0.8, 6.75]].map(([x, d]) => [x * s, d]), 0.08, 0.36), paint, true);
+    add(plate([[0.65, 4.3], [2.45, 6.0], [2.45, 6.4], [0.65, 6.65]].map(([x, d]) => [x * s, d]), 0.08, 0.36), paint, true);
     // An IRIS-T on each wingtip rail.
-    const missile = add(new THREE.CylinderGeometry(0.08, 0.08, 2.9, 10).rotateX(Math.PI / 2), missileMat);
-    missile.position.set(s * 4.22, -0.05, z(10.5));
+    const missile = add(new THREE.CylinderGeometry(0.08, 0.08, 3.0, 10).rotateX(Math.PI / 2), missileMat);
+    missile.position.set(s * 4.22, -0.05, z(10.25));
     const seeker = add(new THREE.SphereGeometry(0.08, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(-Math.PI / 2), glass);
-    seeker.position.set(s * 4.22, -0.05, z(9.05));
+    seeker.position.set(s * 4.22, -0.05, z(8.75));
     for (const a of [0, Math.PI / 2]) {
       const fins = add(new THREE.BoxGeometry(0.42, 0.015, 0.3), missileMat);
-      fins.position.set(s * 4.22, -0.05, z(11.75));
+      fins.position.set(s * 4.22, -0.05, z(11.6));
       fins.rotation.z = a;
     }
   }
@@ -140,7 +140,7 @@ export function buildGripen(): GripenModel {
     group: g,
     paint: [paint, finPaint],
     nozzle: new THREE.Vector3(0, 0.05 * S, z(14.7) * S),
-    muzzles: [-1, 1].map((s) => new THREE.Vector3(s * 0.9 * S, -0.3 * S, z(5) * S)),
+    muzzles: [-1, 1].map((s) => new THREE.Vector3(s * 0.65 * S, -0.3 * S, z(5) * S)),
   };
 }
 
@@ -246,11 +246,11 @@ function paintTexture(): THREE.Texture {
     }
   }
   // Soot fanning back from the nozzle, and wear along the leading edges.
-  const soot = g.createLinearGradient(0, 11.5, 0, 14.2);
+  const soot = g.createLinearGradient(0, 12, 0, 14.2);
   soot.addColorStop(0, 'rgba(30, 28, 26, 0)');
   soot.addColorStop(1, 'rgba(30, 28, 26, 0.55)');
   g.fillStyle = soot;
-  g.fillRect(-0.7, 11.5, 1.4, 2.7);
+  g.fillRect(-0.55, 12, 1.1, 2.2);
   g.filter = 'none';
 
   // Panel lines and control surfaces.
@@ -263,17 +263,17 @@ function paintTexture(): THREE.Texture {
   };
   for (const s of [-1, 1]) {
     // Elevons, split in two along the trailing edge.
-    line([[0.75 * s, 12.45], [4.0 * s, 11.15]]);
-    line([[2.35 * s, 11.78], [2.35 * s, 12.45]]);
+    line([[0.75 * s, 11.15], [4.0 * s, 11.0]]);
+    line([[2.35 * s, 11.08], [2.35 * s, 11.8]]);
     // Leading-edge flaps.
-    line([[1.6 * s, 7.15], [4.0 * s, 10.0]]);
+    line([[1.4 * s, 7.25], [4.0 * s, 9.2]]);
     // Canard hinge line.
-    line([[0.9 * s, 5.6], [2.4 * s, 6.25]]);
+    line([[0.75 * s, 5.75], [2.4 * s, 6.15]]);
     // Fuselage panels and the intake lip.
-    line([[0.55 * s, 2.5], [0.55 * s, 13.5]]);
-    line([[0.95 * s, 4.9], [1.05 * s, 6.2]]);
+    line([[0.42 * s, 2.5], [0.42 * s, 13.5]]);
+    line([[0.68 * s, 5.1], [0.72 * s, 6.4]]);
   }
-  for (const d of [1.6, 6.6, 8.6, 10.6, 12.3]) line([[-0.9, d], [0.9, d]]);
+  for (const d of [6.8, 9.0, 11.0, 12.6]) line([[-0.7, d], [0.7, d]]);
   // The radome joint and the canopy frame.
   g.lineWidth = 0.035;
   line([[-0.38, 1.6], [0.38, 1.6]]);
@@ -284,7 +284,7 @@ function paintTexture(): THREE.Texture {
   g.fillStyle = 'rgba(40, 44, 48, 0.5)';
   for (let d = 6.8; d < 12; d += 0.35) g.fillRect(-0.04, d, 0.08, 0.04);
 
-  for (const s of [-1, 1]) roundel(g, 2.75 * s, 10.75, 0.55);
+  for (const s of [-1, 1]) roundel(g, 2.55 * s, 10.25, 0.55);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
