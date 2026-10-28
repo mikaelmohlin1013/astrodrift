@@ -202,6 +202,30 @@ export class Sfx {
     this.tone(1200, 0, 0.03, 'sine', 0.05);
   }
 
+  /** Rising chime when the combo multiplier goes up; higher for bigger ones. */
+  comboUp(multiplier: number): void {
+    const base = 440 * Math.pow(2, Math.min(multiplier, 8) / 6);
+    this.tone(base, 0, 0.1, 'square', 0.05);
+    this.tone(base * 1.26, 0.06, 0.1, 'square', 0.05);
+    this.tone(base * 1.5, 0.12, 0.3, 'triangle', 0.12);
+  }
+
+  /** Soft descending blip when a chain lapses or breaks. */
+  chainLost(): void {
+    this.sweep(600, 220, 0, 0.25, 'triangle', 0.08);
+  }
+
+  /** Quick whistle when an enemy bolt only just misses. */
+  graze(): void {
+    this.sweep(2400, 3400, 0, 0.08, 'sine', 0.06);
+  }
+
+  /** Sparkling rise when a power-up is picked up. */
+  powerUp(): void {
+    [523, 784, 1047, 1568].forEach((f, i) => this.tone(f, i * 0.05, 0.25, 'triangle', 0.1));
+    this.sweep(300, 1200, 0, 0.3, 'sawtooth', 0.04);
+  }
+
   start(): void {
     this.sweep(220, 880, 0, 0.35, 'triangle', 0.18);
   }

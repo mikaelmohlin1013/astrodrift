@@ -103,7 +103,7 @@ const NORTH = Math.PI / 2;
 const WEST = Math.PI;
 const SOUTH = -Math.PI / 2;
 
-// Level 1: the original course, with one turret and one chaser to learn on.
+// Level 1: the original course, with one turret and a few chasers to learn on.
 //   1. Approach  - open ground with a few rocks to learn the controls
 //   2. Switchback - two rock walls with gaps on opposite sides
 //   3. The Ring  - a circle of boulders with crystals inside, two ways in
@@ -158,7 +158,12 @@ function driftField(): LevelData {
       { x: 17, z: -42 },
     ],
     turrets: [{ x: 0, z: -40 }],
-    chasers: [{ x: 10, z: 12 }],
+    chasers: [
+      { x: 10, z: 12 },
+      { x: -40, z: 28 },
+      { x: -34, z: -10 },
+      { x: 32, z: -24 },
+    ],
   };
 }
 

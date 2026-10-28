@@ -20,6 +20,9 @@ import { Station } from './station';
 import { Missiles } from './missiles';
 import { Shop } from './shop';
 import { blocker, loadSave, loadout, writeSave, type Upgrade } from './upgrades';
+import { POINTS, Score, levelBonuses, loadBestScore, rank, saveBestScore } from './score';
+import { POWERS, PowerUps, type PowerKind } from './powerups';
+import { Popups } from './popups';
 
 const HIT_MIN_SPEED = 2; // gentle bumps don't hurt
 const HIT_DAMAGE = 2; // hull lost per unit of impact speed
@@ -39,6 +42,13 @@ const MISSILE_RANGE = 40;
 const DOCK_SPEED = 4; // the ship has to be going slower than this to dock
 const DOCK_TIME = 0.7; // seconds of settling on the pad before it docks
 const SIZZLE_EVERY = 0.3; // seconds between hiss sounds while burning
+const GRAZE_RADIUS = 2.4; // an enemy bolt passing this close without hitting is a near miss
+const CHASER_DROP = 0.35; // chance a destroyed chaser leaves a power-up; turrets always do
+const HITSTOP = 0.07; // seconds the action all but freezes when an enemy blows up
+const HITSTOP_SPEED = 0.08; // how fast time runs during a hit-stop
+const CAMERA_LEAD = 0.3; // the camera looks this many seconds ahead of the ship
+const RAPID_FIRE = 2; // fire-rate multiplier while Rapid fire is on
+const SPREAD_EXTRA = 2; // extra bolts while Spread shot is on
 
 // 'shop' is the upgrade shop, opened from a station or from the title and
 // end-of-level screens; the game is paused while it is open.
@@ -67,6 +77,9 @@ const enemyBolts = new Bolts(scene, 0xff4a5a, 1.0);
 const missiles = new Missiles(scene);
 const station = new Station(scene);
 const shop = new Shop();
+const score = new Score();
+const powerups = new PowerUps(scene);
+const popups = new Popups();
 const particles = new Particles(scene);
 const hazards = new Hazards(scene);
 const dust = new Dust(scene);
@@ -125,6 +138,7 @@ const state = {
   gateOpen: false,
   endedAt: 0,
   sizzle: 0, // seconds until the next hiss while burning
+  freeze: 0, // seconds of hit-stop left
 };
 
 // The current level's rocks and the gate pylons; turrets are added on top
@@ -151,6 +165,7 @@ function loadLevel(index: number): void {
   lasers.clear();
   enemyBolts.clear();
   missiles.clear();
+  powerups.clear();
   player.reset(level.start);
   state.level = index;
   state.best = loadBest(index);
@@ -175,9 +190,12 @@ function start(index: number): void {
     hitTimer: 0,
     reload: 0,
     gateOpen: false,
+    freeze: 0,
   });
   gate.setOpen(false);
   particles.clear();
+  score.reset();
+  popups.clear();
   follow.update(0, player.mesh.position, true);
   hud.showPlaying(index + 1, LEVELS[index].name);
   hud.message(`Level ${index + 1}: ${LEVELS[index].name}`, 2);
@@ -204,7 +222,12 @@ function endRun(won: boolean): void {
     particles.burst(p, 0x9a7bff, 160, 14, 1.2);
     sfx.win();
     const next = last ? null : { number: state.level + 2, name: LEVELS[state.level + 1].name };
-    hud.showLevelClear(state.level + 1, state.time, state.best, state.hull / gear.maxHull, enemies.total - enemies.alive, enemies.total, next, banked);
+    const bonuses = levelBonuses(state.time, crystals.total, state.hull / gear.maxHull, score.untouched, enemies.alive === 0);
+    const total = score.points + bonuses.reduce((sum, b) => sum + b.points, 0);
+    const best = Math.max(total, loadBestScore(state.level));
+    saveBestScore(state.level, best);
+    const result = { points: score.points, bonuses, total, rank: rank(total, crystals.total, enemies.total), best, bestChain: score.bestChain };
+    hud.showLevelClear(state.level + 1, state.time, state.best, state.hull / gear.maxHull, enemies.total - enemies.alive, enemies.total, next, banked, result);
   } else {
     state.phase = 'over';
     const lost = state.pending;
@@ -213,7 +236,7 @@ function endRun(won: boolean): void {
     particles.burst(p, 0xfff0c0, 40, 6, 0.6);
     follow.shake(0.9);
     sfx.explode();
-    hud.showGameOver(state.collected, crystals.total, LEVELS[state.level].name, lost);
+    hud.showGameOver(state.collected, crystals.total, LEVELS[state.level].name, lost, score.points);
   }
 }
 
@@ -235,6 +258,11 @@ function damage(amount: number): void {
   const rest = amount - absorbed;
   follow.shake(Math.min(0.6, amount / 30));
   if (rest <= 0) return;
+  // The shield keeps a combo alive; a hit to the hull breaks it.
+  if (score.breakChain() >= 3) {
+    sfx.chainLost();
+    popups.show(player.mesh.position, 'Combo broken', '#ff7a86');
+  }
   state.hull = Math.max(0, state.hull - rest);
   state.hullFlash = 1;
   hud.flash();
@@ -261,6 +289,23 @@ function scorch(amount: number, dt: number): void {
     v.set((Math.random() - 0.5) * 2, 2 + Math.random() * 2, (Math.random() - 0.5) * 2);
     particles.spawn(at, v, absorbed > 0 ? new THREE.Color(0x8a9dff) : new THREE.Color(0xff7a2a), 0.4, 0.5);
   }
+}
+
+/** Scores `base` points into the combo where it happened, with a popup. */
+function award(base: number, at: THREE.Vector3, color: string): void {
+  const r = score.add(base);
+  popups.show(at, `+${r.gained}`, color, r.multiplier >= 4);
+  if (r.levelUp) {
+    sfx.comboUp(r.multiplier);
+    popups.show(player.mesh.position.clone().setY(3), `x${r.multiplier} combo`, '#ffb340', true);
+  }
+}
+
+/** An enemy blew up: points, a moment of hit-stop, and maybe a power-up. */
+function enemyDown(at: THREE.Vector3, turret: boolean): void {
+  award(turret ? POINTS.turret : POINTS.chaser, at, '#ff9a5a');
+  state.freeze = HITSTOP;
+  if (turret || Math.random() < CHASER_DROP) powerups.drop(at);
 }
 
 /** Moves this run's earnings into the saved bank; returns how many. */
@@ -389,7 +434,12 @@ const clock = new THREE.Clock();
 let elapsed = 0;
 renderer.setAnimationLoop(() => {
   const raw = clock.getDelta();
-  const dt = Math.min(raw, 0.05);
+  let dt = Math.min(raw, 0.05);
+  // Hit-stop: the action all but freezes for a beat when something blows up.
+  if (state.freeze > 0) {
+    state.freeze -= dt;
+    dt *= HITSTOP_SPEED;
+  }
   tick(dt);
   post.render(raw, state.hullFlash);
 });
@@ -409,6 +459,7 @@ function tick(dt: number): void {
     hud.update(state.hull / gear.maxHull, state.collected, crystals.total, enemies.total - enemies.alive, enemies.total, state.time, state.best);
     hud.updateGear(state.shield, gear.shield, state.missiles, gear.missiles, save.bank, state.pending);
     follow.update(dt, state.shopFrom === 'title' ? titleTarget : p);
+    popups.update(dt, follow.camera);
     return;
   }
   const playing = state.phase === 'playing';
@@ -417,6 +468,7 @@ function tick(dt: number): void {
     state.time += dt;
     const ground = hazards.affect(dt, p, player.velocity);
     player.traction = ground.traction;
+    player.overdrive = powerups.isOn('overdrive');
     player.update(dt, input);
     const impact = Math.max(
       hazards.collide(p, player.velocity, PLAYER_RADIUS, PLAYER_BOUNCE),
@@ -424,7 +476,8 @@ function tick(dt: number): void {
     );
     if (ground.burn > 0) scorch(ground.burn * dt, dt);
     state.hitTimer = Math.max(0, state.hitTimer - dt);
-    if (impact > HIT_MIN_SPEED && state.hitTimer === 0) {
+    // Overdrive shrugs off crashes into rocks.
+    if (impact > HIT_MIN_SPEED && state.hitTimer === 0 && !player.overdrive) {
       damage(impact * HIT_DAMAGE);
     } else if (impact > 0.5 && state.hitTimer === 0) {
       sfx.bump();
@@ -435,11 +488,12 @@ function tick(dt: number): void {
 
     state.reload = Math.max(0, state.reload - dt);
     if (input.fire && state.reload === 0) {
-      state.reload = gear.laserReload;
+      state.reload = gear.laserReload / (powerups.isOn('rapid') ? RAPID_FIRE : 1);
       const muzzle = player.nextMuzzle();
       // A spread shot fans extra bolts out evenly either side of the nose.
-      for (let i = 0; i < gear.bolts; i++) {
-        const angle = player.yaw + (i - (gear.bolts - 1) / 2) * SPREAD_ANGLE;
+      const bolts = gear.bolts + (powerups.isOn('spread') ? SPREAD_EXTRA : 0);
+      for (let i = 0; i < bolts; i++) {
+        const angle = player.yaw + (i - (bolts - 1) / 2) * SPREAD_ANGLE;
         const dir = new THREE.Vector3(-Math.sin(angle), 0, -Math.cos(angle));
         lasers.fire(muzzle, dir, LASER_SPEED, LASER_RANGE, player.velocity);
       }
@@ -467,12 +521,23 @@ function tick(dt: number): void {
     if (state.shieldWait === 0) state.shield = Math.min(gear.shield, state.shield + gear.shieldRegen * dt);
 
     for (const at of crystals.update(dt, p, gear.magnet)) {
-      sfx.collect(state.collected);
+      // The chime climbs with the combo.
+      sfx.collect(score.chain);
       state.collected++;
       state.pending += CRYSTAL_VALUE;
       state.hull = Math.min(gear.maxHull, state.hull + CRYSTAL_REPAIR);
       particles.burst(at, 0x6affd8, 40, 8);
+      award(POINTS.crystal, at, '#6affd8');
     }
+
+    for (const { kind, at } of powerups.update(dt, p)) {
+      const { name, color } = POWERS[kind];
+      sfx.powerUp();
+      particles.burst(at, color, 60, 9, 0.7);
+      popups.show(at, name, cssColor(color), true);
+    }
+
+    if (score.update(dt) >= 3) sfx.chainLost();
 
     // Settling slowly onto the station pad docks the ship.
     const onPad = station.contains(p);
@@ -504,7 +569,9 @@ function tick(dt: number): void {
     particles.burst(at, 0xff4a5a, 60, 9, 0.8);
     follow.shake(0.4);
     sfx.enemyDie();
-    if (playing) damage(RAM_DAMAGE);
+    // In Overdrive the ship smashes chasers instead of being hurt by them.
+    if (playing && player.overdrive) enemyDown(at, false);
+    else if (playing) damage(RAM_DAMAGE);
   }
 
   // Docking may just have opened the shop, which freezes the rest of the frame.
@@ -529,8 +596,11 @@ function tick(dt: number): void {
     particles.burst(at, 0xfff0c0, 12, 5, 0.3);
     sfx.enemyHit();
   }
-  for (const at of kills) {
-    if (playing) follow.shake(0.3);
+  for (const { at, turret } of kills) {
+    if (playing) {
+      follow.shake(0.35);
+      enemyDown(at, turret);
+    }
     particles.burst(at, 0xff8a3a, 90, 10, 0.9);
     particles.burst(at, 0xfff0c0, 30, 5, 0.5);
     sfx.enemyDie();
@@ -539,6 +609,10 @@ function tick(dt: number): void {
   if (playing) {
     const n = enemyBolts.hit(p.x, p.z, PLAYER_RADIUS);
     if (n > 0) damage(n * BOLT_DAMAGE);
+    for (const at of enemyBolts.grazes(p.x, p.z, GRAZE_RADIUS)) {
+      sfx.graze();
+      award(POINTS.graze, at, '#c8d8ff');
+    }
 
     if (state.hull <= 0) endRun(false);
     else if (gate.contains(p)) {
@@ -558,6 +632,10 @@ function tick(dt: number): void {
   player.mesh.visible = state.phase === 'playing' || state.phase === 'title';
   hud.updateGear(state.shield, gear.shield, state.missiles, gear.missiles, save.bank, state.pending);
   hud.update(state.hull / gear.maxHull, state.collected, crystals.total, enemies.total - enemies.alive, enemies.total, state.time, state.best);
+  const active = (Object.keys(POWERS) as PowerKind[])
+    .filter((k) => powerups.isOn(k))
+    .map((k) => ({ name: POWERS[k].name, color: cssColor(POWERS[k].color), left01: powerups.active[k] / POWERS[k].seconds }));
+  hud.updateScore(dt, score.points, score.multiplier, score.chain, score.timer01, active);
 
   const target = state.gateOpen ? gate.position : crystals.nearest(p);
   pointerMat.color.set(state.gateOpen ? 0x9a7bff : 0x6affd8);
@@ -576,9 +654,13 @@ function tick(dt: number): void {
   if (state.phase === 'title') {
     titleTarget.set(Math.sin(elapsed * 0.11) * 18, 0, 30 - (1 - Math.cos(elapsed * 0.07)) * 35);
     follow.update(dt, titleTarget);
+    follow.setSpeed(dt, 0, false);
   } else {
-    follow.update(dt, p);
+    // Look ahead of the ship, so there's more room to see what's coming.
+    follow.update(dt, p.clone().addScaledVector(player.velocity, playing ? CAMERA_LEAD : 0));
+    follow.setSpeed(dt, playing ? player.speed01 : 0, playing && player.isBoosting);
   }
+  popups.update(dt, follow.camera);
   const focus = state.phase === 'title' ? titleTarget : p;
   sun.target.position.copy(focus);
   sun.position.copy(focus).add(sunOffset);
@@ -586,9 +668,9 @@ function tick(dt: number): void {
   radar.update(playing ? p : null, player.yaw, crystals.positions(), enemies.positions(), state.gateOpen ? gate.position : null, station.position);
 }
 
-/** Level names for the title screen, each marked in its theme's colour. */
-function titleLevels(): { name: string; accent: string }[] {
-  return LEVELS.map((l) => ({ name: l.name, accent: cssColor(THEMES[l.theme].veins) }));
+/** Level names for the title screen, each marked in its theme's colour, with its best score. */
+function titleLevels(): { name: string; accent: string; score: number }[] {
+  return LEVELS.map((l, i) => ({ name: l.name, accent: cssColor(THEMES[l.theme].veins), score: loadBestScore(i) }));
 }
 
 // Level 1 keeps the key it had before there were more levels.
@@ -635,5 +717,5 @@ function saveUnlocked(n: number): void {
 
 // Handle for headless tests and debugging in the dev server.
 if (import.meta.env.DEV) {
-  Object.assign(window, { astrodrift: { state, save, gear: () => gear, buy, station, missiles, player, crystals, gate, enemies, hazards, lasers, enemyBolts, particles, follow, levels: LEVELS, rocks: () => rocks, start, tick, endRun } });
+  Object.assign(window, { astrodrift: { state, save, score, powerups, gear: () => gear, buy, station, missiles, player, crystals, gate, enemies, hazards, lasers, enemyBolts, particles, follow, levels: LEVELS, rocks: () => rocks, start, tick, endRun } });
 }

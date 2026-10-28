@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { WORLD_SIZE, type Rock } from './world';
 import { halo } from './fx';
 
-const MAX = 120; // enough for five-bolt spread shots at the fastest fire rate
+const MAX = 240; // enough for seven-bolt spread shots at rapid fire
 const FORWARD = new THREE.Vector3(0, 0, -1);
 
 interface Bolt {
@@ -10,6 +10,8 @@ interface Bolt {
   prev: THREE.Vector3;
   vel: THREE.Vector3;
   life: number;
+  /** Already counted as a near miss. */
+  grazed: boolean;
 }
 
 // A pool of laser bolts that fly in a straight line until they hit a rock,
@@ -28,7 +30,7 @@ export class Bolts {
       mesh.add(new THREE.Mesh(geo, mat), new THREE.Mesh(coreGeo, core), halo(color, 2.4, 0.9));
       mesh.visible = false;
       scene.add(mesh);
-      this.bolts.push({ mesh, prev: new THREE.Vector3(), vel: new THREE.Vector3(), life: 0 });
+      this.bolts.push({ mesh, prev: new THREE.Vector3(), vel: new THREE.Vector3(), life: 0, grazed: false });
     }
   }
 
@@ -39,6 +41,7 @@ export class Bolts {
     b.vel.copy(dir).multiplyScalar(speed);
     if (carry) b.vel.add(carry);
     b.life = range / b.vel.length();
+    b.grazed = false;
     b.mesh.position.copy(from);
     b.prev.copy(from);
     b.mesh.quaternion.setFromUnitVectors(FORWARD, dir);
@@ -72,6 +75,21 @@ export class Bolts {
       }
     }
     return n;
+  }
+
+  /**
+   * Near misses: bolts that passed within `radius` of (x, z) this frame without
+   * hitting. Each bolt counts once; returns where they were.
+   */
+  grazes(x: number, z: number, radius: number): THREE.Vector3[] {
+    const out: THREE.Vector3[] = [];
+    for (const b of this.bolts) {
+      if (b.life > 0 && !b.grazed && segmentHitsCircle(b.prev, b.mesh.position, x, z, radius)) {
+        b.grazed = true;
+        out.push(b.mesh.position.clone());
+      }
+    }
+    return out;
   }
 
   clear(): void {

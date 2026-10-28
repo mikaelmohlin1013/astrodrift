@@ -59,7 +59,7 @@
       #radar { right: 16px; top: 128px; width: 150px; height: 150px; border-radius: 50%; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4); }
       #sound { right: 16px; bottom: 14px; font-size: 12px; color: var(--dim); }
       #toast {
-        left: 50%; top: 16%; transform: translate(-50%, -8px); font-size: 18px; font-weight: 600; letter-spacing: 0.06em;
+        left: 50%; top: 22%; transform: translate(-50%, -8px); font-size: 18px; font-weight: 600; letter-spacing: 0.06em;
         padding: 8px 20px; border-radius: 999px; white-space: nowrap;
         background: rgba(12, 16, 34, 0.55); border: 1px solid rgba(154, 123, 255, 0.35);
         text-shadow: 0 0 14px rgba(154, 123, 255, 0.9); box-shadow: 0 0 24px rgba(154, 123, 255, 0.2);
@@ -69,6 +69,42 @@
       #hit-flash { inset: 0; box-shadow: inset 0 0 140px rgba(255, 60, 70, 0.9); opacity: 0; }
       #hit-flash.on { animation: hit 0.4s ease-out; }
       @keyframes hit { from { opacity: 1; } to { opacity: 0; } }
+      #scoreboard { left: 50%; top: 14px; transform: translateX(-50%); display: grid; justify-items: center; gap: 4px; }
+      #points {
+        font-size: 34px; font-weight: 800; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; color: #fff;
+        text-shadow: 0 0 18px rgba(106, 255, 216, 0.55), 0 2px 3px rgba(0, 0, 0, 0.6);
+      }
+      #combo { display: grid; justify-items: center; gap: 3px; transition: opacity 0.2s; }
+      #combo.off { opacity: 0; }
+      #combo-mult { font-size: 22px; font-weight: 800; color: var(--amber); text-shadow: 0 0 14px rgba(255, 179, 64, 0.8); }
+      #combo-mult small { font-size: 11px; letter-spacing: 0.16em; margin-left: 4px; color: var(--ink); opacity: 0.75; }
+      #combo-mult.bump { animation: bump 0.3s ease-out; }
+      @keyframes bump { from { transform: scale(1.7); } to { transform: scale(1); } }
+      #combo[data-hot] #combo-mult { color: #ff6a3a; text-shadow: 0 0 18px rgba(255, 90, 40, 0.95); }
+      #combo-bar { width: 120px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+      #combo-fill { height: 100%; background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+      #powers { display: flex; gap: 8px; }
+      .power { display: grid; gap: 3px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--c); text-shadow: 0 0 10px var(--c); }
+      .power .bar { height: 3px; width: 90px; }
+      .power .fill { background: var(--c); transition: none; }
+      #popups { inset: 0; overflow: hidden; }
+      .popup {
+        position: absolute; left: 0; top: 0; font-weight: 800; font-size: 17px; white-space: nowrap; will-change: transform;
+        text-shadow: 0 0 10px currentColor, 0 2px 2px rgba(0, 0, 0, 0.8);
+      }
+      .popup.big { font-size: 26px; letter-spacing: 0.04em; }
+      #clear-score { display: grid; grid-template-columns: auto auto; gap: 2px 24px; min-width: 260px; font-variant-numeric: tabular-nums; }
+      #clear-score span { animation: appear 0.3s backwards; }
+      #clear-score span:nth-child(even) { text-align: right; font-weight: 600; }
+      #clear-score .total { font-size: 22px; font-weight: 800; color: #fff; border-top: 1px solid var(--edge); padding-top: 4px; margin-top: 4px; }
+      @keyframes appear { from { opacity: 0; transform: translateY(6px); } }
+      #rank { font-size: 64px; font-weight: 900; line-height: 1; animation: stamp 0.4s 1.3s backwards cubic-bezier(0.3, 1.6, 0.6, 1); }
+      #rank[data-rank='S'] { color: #ffd040; text-shadow: 0 0 30px rgba(255, 208, 64, 0.9); }
+      #rank[data-rank='A'] { color: var(--teal); text-shadow: 0 0 24px rgba(106, 255, 216, 0.7); }
+      #rank[data-rank='B'] { color: var(--blue); text-shadow: 0 0 20px rgba(79, 195, 255, 0.6); }
+      #rank[data-rank='C'] { color: var(--dim); }
+      @keyframes stamp { from { opacity: 0; transform: scale(3); } }
+      #title-levels small { margin-left: auto; opacity: 0.6; font-size: 11px; white-space: nowrap; }
       .panel {
         inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
         gap: 10px; background: radial-gradient(ellipse at center, rgba(5, 7, 13, 0.35), rgba(5, 7, 13, 0.8)); text-align: center;
@@ -97,8 +133,8 @@
         background: rgba(255, 255, 255, 0.05);
       }
       #title .prompt { font-size: 20px; color: var(--teal); text-shadow: 0 0 14px rgba(106, 255, 216, 0.6); }
-      #title-levels { display: grid; grid-template-columns: repeat(4, minmax(0, 150px)); gap: 8px; margin-top: 16px; }
-      @media (max-width: 660px) { #title-levels { grid-template-columns: repeat(2, minmax(0, 150px)); } }
+      #title-levels { display: grid; grid-template-columns: repeat(4, minmax(0, 180px)); gap: 8px; margin-top: 16px; }
+      @media (max-width: 660px) { #title-levels { grid-template-columns: repeat(2, minmax(0, 180px)); } }
       #title-levels span {
         display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 9px; font-size: 13px; text-align: left;
         background: rgba(20, 32, 56, 0.55); border: 1px solid var(--edge); border-left: 3px solid var(--accent, var(--teal));
@@ -152,14 +188,22 @@
       <span class="label">Best <span id="best">--</span></span>
       <span id="bank"></span>
     </div>
+    <div id="scoreboard" class="overlay hidden">
+      <div id="points">0</div>
+      <div id="combo" class="off">
+        <span id="combo-mult">x1</span>
+        <div id="combo-bar"><div id="combo-fill"></div></div>
+      </div>
+      <div id="powers"></div>
+    </div>
     <canvas id="radar" class="overlay hidden"></canvas>
     <div id="toast" class="overlay"></div>
-    <div id="help" class="overlay hidden">W / ↑ thrust · A D / ← → turn · S / ↓ brake · Shift boost · Space fire · E missile · Land slowly on the green pad to repair and upgrade</div>
+    <div id="help" class="overlay hidden">W / ↑ thrust · A D / ← → turn · S / ↓ brake · Shift boost · Space fire · E missile · Chain crystals, kills and near misses for a combo · Land slowly on the green pad to repair and upgrade</div>
     <div id="sound" class="overlay"><kbd>M</kbd> sound <span id="sound-state">on</span></div>
 
     <div id="title" class="overlay panel">
       <h1>ASTRODRIFT</h1>
-      <div class="tagline">Pick up every crystal in the field, then fly through the gate at the far end. Mind the rocks, and shoot the turrets and chasers before they get you. Land on the green repair pad in each level to fix your hull and spend crystals on upgrades.</div>
+      <div class="tagline">Pick up every crystal in the field, then fly through the gate at the far end. Mind the rocks, and shoot the turrets and chasers before they get you. Chain pickups, kills and near misses for a score combo, and grab the power-ups enemies drop. Land on the green pad to repair and upgrade.</div>
       <div class="keys">
         <span><kbd>W</kbd> or <kbd>↑</kbd></span><span>thrust forward</span>
         <span><kbd>A</kbd> <kbd>D</kbd> or <kbd>←</kbd> <kbd>→</kbd></span><span>turn the ship</span>
@@ -188,6 +232,8 @@
       <div class="card">
         <h1 id="clear-title">Level clear</h1>
         <div id="clear-time" class="result"></div>
+        <div id="rank"></div>
+        <div id="clear-score"></div>
         <div id="clear-detail"></div>
         <div id="clear-prompt" class="prompt">Press Enter to fly again</div>
       </div>
