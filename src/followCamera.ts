@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 
 // Camera that hangs above and behind a target and smoothly trails it, and
-// can shake for a moment when something hits hard.
+// can shake for a moment when something hits hard. It widens a little at
+// speed, so going fast feels fast.
 export class FollowCamera {
   readonly camera: THREE.PerspectiveCamera;
   private offset = new THREE.Vector3(0, 18, 12);
@@ -9,6 +10,7 @@ export class FollowCamera {
   private base = new THREE.Vector3();
   private trauma = 0;
   private time = 0;
+  private fov = 50;
 
   constructor(aspect: number) {
     this.camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 500);
@@ -17,6 +19,16 @@ export class FollowCamera {
   /** Adds a shake, 0..1; shakes add up but never past 1. */
   shake(amount: number): void {
     this.trauma = Math.min(1, this.trauma + amount);
+  }
+
+  /** Widens the view with speed (0..1); punches out a little more on a boost. */
+  setSpeed(dt: number, speed01: number, boosting: boolean): void {
+    const want = 50 + speed01 * 6 + (boosting ? 3 : 0);
+    this.fov += (want - this.fov) * (1 - Math.exp(-3 * dt));
+    if (Math.abs(this.camera.fov - this.fov) > 0.01) {
+      this.camera.fov = this.fov;
+      this.camera.updateProjectionMatrix();
+    }
   }
 
   update(dt: number, target: THREE.Vector3, snap = false): void {

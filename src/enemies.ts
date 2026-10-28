@@ -16,7 +16,7 @@ const TURRET_BOLT_SPEED = 18;
 const CHASER_RADIUS = 0.75;
 const CHASER_HP = 2;
 const CHASER_WAKE = 17;
-const CHASER_SPEED = 8.5; // the ship's top speed is 11, so you can outrun one
+const CHASER_SPEED = 9.5; // the ship's top speed is 12.5, so you can outrun one
 const CHASER_ACCEL = 2.2;
 
 /** Crystals earned for destroying each kind of enemy. */
@@ -181,11 +181,12 @@ export class Enemies {
 
   /**
    * Checks the player's shots against every enemy. Returns where shots hit,
-   * where enemies were destroyed, and the crystals earned for them.
+   * where enemies were destroyed (and whether each was a turret), and the
+   * crystals earned for them.
    */
-  takeHits(sources: DamageSource[]): { hits: THREE.Vector3[]; kills: THREE.Vector3[]; reward: number } {
+  takeHits(sources: DamageSource[]): { hits: THREE.Vector3[]; kills: { at: THREE.Vector3; turret: boolean }[]; reward: number } {
     const hits: THREE.Vector3[] = [];
-    const kills: THREE.Vector3[] = [];
+    const kills: { at: THREE.Vector3; turret: boolean }[] = [];
     let reward = 0;
     for (const e of [...this.turrets, ...this.chasers]) {
       if (e.hp <= 0) continue;
@@ -201,7 +202,7 @@ export class Enemies {
       const at = new THREE.Vector3(p.x, 1.2, p.z);
       if (e.hp <= 0) {
         e.group.visible = false;
-        kills.push(at);
+        kills.push({ at, turret });
         reward += turret ? TURRET_REWARD : CHASER_REWARD;
       } else {
         hits.push(at);

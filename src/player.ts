@@ -5,16 +5,17 @@ import type { Spot } from './level';
 import { halo, type Particles } from './fx';
 import { buildGripen } from './gripen';
 
-const SPEED = 11;
+const SPEED = 12.5;
 const BOOST = 1.6;
-const THRUST = 16; // forward acceleration
+const THRUST = 24; // forward acceleration
+const OVERDRIVE = 1.3; // speed and thrust while the Overdrive power-up is on
 const BRAKE = 18;
 const REVERSE = 6;
 const REVERSE_MAX = 4;
 const DRAG = 0.8;
 const GRIP = 2.5; // how quickly sideways drift dies away
-const TURN_SPEED = 3.2; // radians per second at full turn
-const TURN = 10;
+const TURN_SPEED = 3.6; // radians per second at full turn
+const TURN = 14;
 export const PLAYER_BOUNCE = 0.6;
 
 export const PLAYER_RADIUS = 0.9;
@@ -37,6 +38,8 @@ export class Player {
   private shield: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
   /** 1 on solid ground, 0 on ice: how much drag and sideways grip there is. */
   traction = 1;
+  /** The Overdrive power-up: faster, and the ship glows gold. */
+  overdrive = false;
 
   constructor() {
     // A JAS 39 Gripen; bolts leave from under the intakes, alternating sides.
@@ -140,9 +143,10 @@ export class Player {
     const forward = this.forward;
 
     // Thrust pushes along the nose; down brakes and then backs up slowly.
-    const max = SPEED * (this.boosting ? BOOST : 1);
+    const power = (this.boosting ? BOOST : 1) * (this.overdrive ? OVERDRIVE : 1);
+    const max = SPEED * power;
     const along = this.velocity.dot(forward);
-    if (thrust > 0) this.velocity.addScaledVector(forward, THRUST * (this.boosting ? BOOST : 1) * dt);
+    if (thrust > 0) this.velocity.addScaledVector(forward, THRUST * power * dt);
     else if (thrust < 0) this.velocity.addScaledVector(forward, (along > 0 ? -BRAKE * (0.3 + 0.7 * this.traction) : -REVERSE) * dt);
     if (thrust < 0 && along < -REVERSE_MAX) this.velocity.addScaledVector(forward, -along - REVERSE_MAX);
 
@@ -182,7 +186,7 @@ export class Player {
     this.emitTimer -= dt;
     if (this.emitTimer > 0 || !this.thrusting) return;
     this.emitTimer = this.boosting ? 0.012 : 0.03;
-    const color = new THREE.Color(this.boosting ? 0xffd080 : 0xff9040);
+    const color = new THREE.Color(this.overdrive ? 0xffe060 : this.boosting ? 0xffd080 : 0xff9040);
     const back = new THREE.Vector3(0, 0, 3).applyQuaternion(this.mesh.quaternion);
     for (const n of this.nozzles) {
       const p = n.clone().applyMatrix4(this.mesh.matrixWorld);
@@ -192,9 +196,10 @@ export class Player {
     }
   }
 
-  /** Flashes the hull red for a moment after a hit (0..1 strength). */
+  /** Flashes the hull red for a moment after a hit (0..1 strength), and glows gold in Overdrive. */
   setDamageFlash(amount: number): void {
-    for (const m of this.paint) m.emissive.setRGB(amount, 0, 0);
+    const gold = this.overdrive ? 0.35 + Math.sin(this.time * 12) * 0.15 : 0;
+    for (const m of this.paint) m.emissive.setRGB(amount + gold, gold * 0.7, 0);
   }
 
   /**
@@ -213,6 +218,7 @@ export class Player {
     this.turnRate = 0;
     this.velocity.set(0, 0, 0);
     this.traction = 1;
+    this.overdrive = false;
     this.setDamageFlash(0);
   }
 }

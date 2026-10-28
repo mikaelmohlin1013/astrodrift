@@ -15,7 +15,7 @@ Then open http://localhost:5173 and press Enter on the title screen. The control
 
 There are eight hand-built levels, each running from a landing pad in the south to a gate in the north. Pick up every crystal to open the gate, then fly through it to reach the next level. Each crystal patches the hull a little. Hitting rocks fast damages the hull, and so do enemies, and when it runs out you retry the level. The arrow on the ground points to the nearest crystal, and to the gate once it is open.
 
-1. **Drift Field**: open ground, a switchback between two rock walls, a ring of boulders and a final run. One turret and one chaser to learn on.
+1. **Drift Field**: open ground, a switchback between two rock walls, a ring of boulders and a final run. One turret and a few chasers to learn on.
 2. **Crossfire**: a canyon up the middle with bays on each side. Turrets in the bays fire through the gaps in the canyon walls.
 3. **Switchyard**: four walls with a gap on alternating sides, so you weave across the whole field past turrets and chasers.
 4. **The Hive**: three rings of boulders, each with a turret guarding the crystals inside, and chasers roaming between them.
@@ -27,6 +27,22 @@ There are eight hand-built levels, each running from a landing pad in the south 
 There are two kinds of enemy. Turrets stay put, turn to track the ship and fire when they have a clear line to it; their eye glows brighter as a shot charges, and rocks block their fire. Chasers hover in place until the ship comes near, then fly straight at it and explode on contact. Turrets take four hits and chasers take two.
 
 Levels you have reached are unlocked on the title screen (press 1 to 8 to pick one), and the best time for each level is saved in the browser.
+
+## Score, combos and power-ups
+
+Every crystal scores 100, a chaser 150, a turret 250, and an enemy bolt that only just misses the ship scores 25. Score again within 3.5 seconds and the combo grows: the second in a chain scores double, the third triple, up to 8×. The bar under the multiplier shows how long you have. The shield keeps a combo alive, but a hit to the hull breaks it. Points pop up where they were scored, and the score in the top middle rolls up to match.
+
+Clearing a level adds bonuses for speed (against a par time based on the number of crystals), hull left, never losing hull (Untouchable) and destroying every enemy (Clean sweep), then grades the run S, A, B or C. The best score for each level is saved and shown on the title screen.
+
+Destroyed turrets always drop a power-up, and chasers sometimes do. Fly through one to switch it on for a few seconds:
+
+| Power-up | Colour | What it does |
+| --- | --- | --- |
+| Rapid fire | Orange | Fires twice as fast for 8 seconds |
+| Spread shot | Blue | Two extra bolts in every shot for 8 seconds |
+| Overdrive | Gold | 30% faster for 6 seconds, crashes into rocks don't hurt, and chasers that ram the ship are destroyed instead |
+
+Blowing up an enemy freezes the action for a split second, the camera looks ahead of the ship in the direction it's flying, and the view widens as it speeds up.
 
 ## Repair stations and upgrades
 
@@ -77,8 +93,11 @@ Each group of levels has its own look (a cratered moon at dusk, snow and blue ic
 - `src/crystals.ts` places and animates the crystals and detects pickups
 - `src/fx.ts` has the glow sprites, the particle pool for exhaust, sparks and bursts, shockwave rings, and the drifting dust
 - `src/audio.ts` synthesises the sound effects with the Web Audio API
-- `src/hud.ts` drives the title screen, hull bar, crystal count, timer and end-of-run panels
-- `src/followCamera.ts` is the camera that trails the player from above and behind, and shakes on big hits
+- `src/hud.ts` drives the title screen, hull bar, crystal count, timer, score and combo, and end-of-run panels
+- `src/score.ts` keeps the score and combo chain, and works out the level-clear bonuses and grade
+- `src/powerups.ts` has the power-ups enemies drop
+- `src/popups.ts` shows the score numbers that float up where something scored
+- `src/followCamera.ts` is the camera that trails the player from above and behind, widens with speed, and shakes on big hits
 - `src/input.ts` reads the keyboard
 
 ## Credits
